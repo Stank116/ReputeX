@@ -15,6 +15,7 @@ no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build"]
+pyth = ["dep:pyth-solana-receiver-sdk"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
@@ -23,6 +24,7 @@ custom-panic = []
 [dependencies]
 anchor-lang = "0.32.1"
 anchor-spl = "0.32.1"
+pyth-solana-receiver-sdk = { version = "1.2.0", optional = true }
 
 
 [lints.rust]

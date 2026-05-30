@@ -30,6 +30,16 @@ pub struct MarketRiskConfigured {
 }
 
 #[event]
+pub struct MarketOracleConfigured {
+    pub market_index: u64,
+    pub oracle_feed_id: [u8; 32],
+    pub oracle_max_age_seconds: u64,
+    pub oracle_max_confidence_bps: u64,
+    pub price_decimals: u8,
+    pub oracle_enabled: bool,
+}
+
+#[event]
 pub struct MarketPriceUpdated {
     pub market_index: u64,
     pub old_price: u64,

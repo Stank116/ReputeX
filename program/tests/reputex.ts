@@ -194,10 +194,38 @@ describe("reputex", () => {
     assert.equal(marketAccount.maxSkewBps.toNumber(), 10_000);
     assert.equal(marketAccount.maxFundingRateBps.toNumber(), 100);
     assert.equal(marketAccount.fundingIntervalSlots.toNumber(), 1);
+    assert.deepEqual(Array.from(marketAccount.oracleFeedId), Array(32).fill(0));
+    assert.equal(marketAccount.oracleMaxAgeSeconds.toNumber(), 30);
+    assert.equal(marketAccount.oracleMaxConfidenceBps.toNumber(), 100);
+    assert.equal(marketAccount.priceDecimals, 0);
+    assert.equal(marketAccount.oracleEnabled, false);
 
     const protocolAccount = await program.account.protocol.fetch(protocol);
     assert.equal(protocolAccount.totalMarkets.toNumber(), 1);
     assert.equal(protocolAccount.tradingPaused, false);
+  });
+
+  it("configures market oracle validation settings", async () => {
+    const feedId = Array.from({ length: 32 }, (_, index) => index + 1);
+
+    await program.methods
+      .configureMarketOracle(
+        new anchor.BN(marketIndex),
+        feedId,
+        new anchor.BN(45),
+        new anchor.BN(75),
+        6,
+        true
+      )
+      .accountsStrict({ protocol, market, authority: owner })
+      .rpc();
+
+    const marketAccount = await program.account.market.fetch(market);
+    assert.deepEqual(Array.from(marketAccount.oracleFeedId), feedId);
+    assert.equal(marketAccount.oracleMaxAgeSeconds.toNumber(), 45);
+    assert.equal(marketAccount.oracleMaxConfidenceBps.toNumber(), 75);
+    assert.equal(marketAccount.priceDecimals, 6);
+    assert.equal(marketAccount.oracleEnabled, true);
   });
 
   it("creates a trader profile and deposits SPL collateral", async () => {

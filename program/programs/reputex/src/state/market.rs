@@ -21,5 +21,10 @@ pub struct Market {
     pub cumulative_funding_rate_bps: i64,
     pub total_long_size: u64,
     pub total_short_size: u64,
+    pub oracle_feed_id: [u8; 32],
+    pub oracle_max_age_seconds: u64,
+    pub oracle_max_confidence_bps: u64,
+    pub price_decimals: u8,
+    pub oracle_enabled: bool,
     pub bump: u8,
 }

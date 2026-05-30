@@ -37,6 +37,7 @@ One thing worth noting: `position_id` comes from `protocol.next_position_id` whi
 - `initialize_protocol` — sets up the Protocol PDA and SPL collateral vault. Call this once after deploying with the collateral mint you want to accept.
 - `initialize_market(market_index, symbol, initial_price)` — creates a new market. Market index 0 is typically SOL-PERP.
 - `update_market_price(market_index, new_price)` — moves the oracle price. On mainnet you'd replace this with a Pyth feed; on devnet this lets tests drive prices.
+- `configure_market_oracle(market_index, oracle_feed_id, oracle_max_age_seconds, oracle_max_confidence_bps, price_decimals, oracle_enabled)` — stores the Pyth feed id and validation limits used by the oracle price path.
 - `update_funding_rate(market_index, funding_delta_bps)` — updates the cumulative funding index used when positions close or liquidate.
 - `settle_funding(market_index)` — permissionless crank that advances the cumulative funding index from long/short market skew.
 - `configure_market_risk(market_index, max_open_interest, max_skew_bps, max_funding_rate_bps, funding_interval_slots)` — tunes per-market risk limits.
@@ -121,20 +122,22 @@ anchor test
 What the test suite covers:
 
 1. Protocol and market initialization — checks that accounts are created with correct initial values
-2. Trader profile creation and collateral deposit — verifies starting reputation score of 100 and clean balance
-3. Open and close a profitable long — moves price up 10%, closes position, checks PnL math and reputation update
-4. Pause guard — confirms new positions cannot open while trading is paused
-5. Skew guard — confirms tightened market skew limits reject one-sided exposure
-6. Funding crank — confirms the market-state funding path can settle
-7. Liquidation guard — tries to liquidate a healthy position and confirms the program rejects it
-8. Successful liquidation — crashes price to 1,000, confirms the underwater position gets liquidated, checks reputation penalty
-9. Withdraw collateral — verifies the balance decreases correctly
+2. Oracle configuration — verifies feed id, freshness, confidence, decimals, and enablement settings
+3. Trader profile creation and collateral deposit — verifies starting reputation score of 100 and clean balance
+4. Open and close a profitable long — moves price up 10%, closes position, checks PnL math and reputation update
+5. Pause guard — confirms new positions cannot open while trading is paused
+6. Skew guard — confirms tightened market skew limits reject one-sided exposure
+7. Funding crank — confirms the market-state funding path can settle
+8. Liquidation guard — tries to liquidate a healthy position and confirms the program rejects it
+9. Successful liquidation — crashes price to 1,000, confirms the underwater position gets liquidated, checks reputation penalty
+10. Withdraw collateral — verifies the balance decreases correctly
 
-All 9 tests should pass with output like:
+All 10 tests should pass with output like:
 
 ```
   reputex
     ✓ initializes protocol and market
+    ✓ configures market oracle validation settings
     ✓ creates a trader profile and deposits SPL collateral
     ✓ opens and closes a profitable long position
     ✓ pauses new position opens without changing existing balances
@@ -144,7 +147,7 @@ All 9 tests should pass with output like:
     ✓ liquidates an underwater position
     ✓ withdraw collateral reduces balance correctly
 
-  9 passing (Xs)
+  10 passing (Xs)
 ```
 
 ---
@@ -229,7 +232,7 @@ program/
 
 ## Known limitations
 
-- **Single admin oracle.** `update_market_price` is gated to the protocol authority. A production version should use Pyth or another battle-tested oracle feed with staleness/confidence checks.
+- **Pyth path is feature-gated.** Local/devnet tests still use `update_market_price`; production builds can enable the `pyth` feature and use `update_market_price_from_pyth` with a configured feed id, freshness limit, and confidence limit.
 - **Funding has a crank path, but keepers are still needed.** Funding payments are settled through a cumulative funding index and can be advanced from long/short skew with `settle_funding`.
 - **Market max leverage is capped at 5x.** The effective max is lower for traders whose reputation tier has not unlocked the full market cap.
 - **Not audited.** Do not put real user funds at risk until this has independent security review, oracle review, and deployment/runbook hardening.

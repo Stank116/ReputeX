@@ -52,6 +52,14 @@ pub mod reputex {
         update_market_price::handler(ctx, market_index, new_price)
     }
 
+    #[cfg(feature = "pyth")]
+    pub fn update_market_price_from_pyth(
+        ctx: Context<UpdateMarketPriceFromPyth>,
+        market_index: u64,
+    ) -> Result<()> {
+        update_market_price_from_pyth::handler(ctx, market_index)
+    }
+
     pub fn update_funding_rate(
         ctx: Context<UpdateFundingRate>,
         market_index: u64,
@@ -79,6 +87,26 @@ pub mod reputex {
             max_skew_bps,
             max_funding_rate_bps,
             funding_interval_slots,
+        )
+    }
+
+    pub fn configure_market_oracle(
+        ctx: Context<ConfigureMarketOracle>,
+        market_index: u64,
+        oracle_feed_id: [u8; 32],
+        oracle_max_age_seconds: u64,
+        oracle_max_confidence_bps: u64,
+        price_decimals: u8,
+        oracle_enabled: bool,
+    ) -> Result<()> {
+        configure_market_oracle::handler(
+            ctx,
+            market_index,
+            oracle_feed_id,
+            oracle_max_age_seconds,
+            oracle_max_confidence_bps,
+            price_decimals,
+            oracle_enabled,
         )
     }
 

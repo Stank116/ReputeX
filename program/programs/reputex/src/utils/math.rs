@@ -138,3 +138,26 @@ pub fn max_leverage_for_reputation(reputation_score: u64, market_max_leverage: u
 
     reputation_cap.min(market_max_leverage)
 }
+
+pub fn normalize_oracle_price(price: i64, exponent: i32, target_decimals: u8) -> Result<u64> {
+    require!(price > 0, ReputexError::InvalidOraclePrice);
+
+    let scale_delta = exponent
+        .checked_add(target_decimals as i32)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    let abs_delta = scale_delta.unsigned_abs();
+    let multiplier = 10u128
+        .checked_pow(abs_delta)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    let normalized = if scale_delta >= 0 {
+        (price as u128)
+            .checked_mul(multiplier)
+            .ok_or(error!(ReputexError::MathOverflow))?
+    } else {
+        (price as u128)
+            .checked_div(multiplier)
+            .ok_or(error!(ReputexError::MathOverflow))?
+    };
+
+    u64::try_from(normalized).map_err(|_| error!(ReputexError::MathOverflow))
+}

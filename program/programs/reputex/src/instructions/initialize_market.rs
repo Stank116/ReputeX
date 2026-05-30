@@ -3,7 +3,8 @@ use anchor_lang::prelude::*;
 use crate::constants::{
     DEFAULT_FUNDING_INTERVAL_SLOTS, DEFAULT_LIQUIDATION_FEE_BPS, DEFAULT_MAINTENANCE_MARGIN_BPS,
     DEFAULT_MAX_FUNDING_RATE_BPS, DEFAULT_MAX_OPEN_INTEREST, DEFAULT_MAX_SKEW_BPS,
-    DEFAULT_TRADING_FEE_BPS, MAX_LEVERAGE,
+    DEFAULT_ORACLE_MAX_AGE_SECONDS, DEFAULT_ORACLE_MAX_CONFIDENCE_BPS, DEFAULT_TRADING_FEE_BPS,
+    MAX_LEVERAGE,
 };
 use crate::errors::ReputexError;
 use crate::events::MarketInitialized;
@@ -68,6 +69,11 @@ pub fn handler(
     market.cumulative_funding_rate_bps = 0;
     market.total_long_size = 0;
     market.total_short_size = 0;
+    market.oracle_feed_id = [0; 32];
+    market.oracle_max_age_seconds = DEFAULT_ORACLE_MAX_AGE_SECONDS;
+    market.oracle_max_confidence_bps = DEFAULT_ORACLE_MAX_CONFIDENCE_BPS;
+    market.price_decimals = 0;
+    market.oracle_enabled = false;
     market.bump = ctx.bumps.market;
 
     protocol.total_markets = protocol.total_markets.saturating_add(1);

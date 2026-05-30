@@ -56,6 +56,15 @@ pub enum ReputexError {
     #[msg("Funding interval has not elapsed")]
     FundingNotReady,
 
+    #[msg("Oracle is not configured for this market")]
+    OracleNotConfigured,
+
+    #[msg("Oracle price is invalid")]
+    InvalidOraclePrice,
+
+    #[msg("Oracle confidence interval is too wide")]
+    OracleConfidenceTooWide,
+
     #[msg("Math overflow or underflow")]
     MathOverflow,
 }

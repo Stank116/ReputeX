@@ -47,10 +47,9 @@ solana program show <PROGRAM_ID> --url devnet
 
 Do not accept real user deposits until these are done:
 
-- Replace `update_market_price` with Pyth or Switchboard feed verification.
-- Validate oracle feed id per market.
-- Reject stale prices.
-- Reject prices with confidence intervals above the market's max confidence.
+- Build and test production artifacts with the `pyth` feature enabled.
+- Configure one Pyth feed id per market with `configure_market_oracle`.
+- Validate every Pyth path on devnet with stale-price and wide-confidence failures.
 - Submit fresh oracle updates in frontend transactions before trading.
 - Build the real wallet frontend with Anchor client calls and token account
   handling.

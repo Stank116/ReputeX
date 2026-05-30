@@ -1,4 +1,5 @@
 pub mod close_position;
+pub mod configure_market_oracle;
 pub mod configure_market_risk;
 pub mod create_trader_profile;
 pub mod deposit_collateral;
@@ -11,9 +12,12 @@ pub mod set_protocol_paused;
 pub mod settle_funding;
 pub mod update_funding_rate;
 pub mod update_market_price;
+#[cfg(feature = "pyth")]
+pub mod update_market_price_from_pyth;
 pub mod withdraw_collateral;
 
 pub use close_position::ClosePosition;
+pub use configure_market_oracle::ConfigureMarketOracle;
 pub use configure_market_risk::ConfigureMarketRisk;
 pub use create_trader_profile::CreateTraderProfile;
 pub use deposit_collateral::DepositCollateral;
@@ -26,4 +30,6 @@ pub use set_protocol_paused::SetProtocolPaused;
 pub use settle_funding::SettleFunding;
 pub use update_funding_rate::UpdateFundingRate;
 pub use update_market_price::UpdateMarketPrice;
+#[cfg(feature = "pyth")]
+pub use update_market_price_from_pyth::UpdateMarketPriceFromPyth;
 pub use withdraw_collateral::WithdrawCollateral;
