@@ -6,6 +6,20 @@ Built with Anchor 0.32.1 on Solana devnet.
 
 ---
 
+## Frontend
+
+The frontend now lives in `../frontend` as a React/Vite app. It includes the
+local trading simulator and a Live Devnet tab for Phantom-driven Anchor
+transactions after a fresh IDL is generated with `anchor build`.
+
+```bash
+cd ../frontend
+npm install
+npm run dev
+```
+
+---
+
 ## What this is
 
 Most perps protocols give every wallet the same max leverage regardless of track record. ReputeX flips that — your reputation score goes up when you trade profitably and falls when you get rekt. New wallets start at 100 points and have to earn higher leverage through consistent performance.

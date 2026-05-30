@@ -6,14 +6,22 @@ Built with Anchor 0.32.1 on Solana devnet.
 
 ---
 
-## Trading terminal
+## React trading app
 
-The project now includes a dependency-free trading terminal at
-`frontend/index.html`. Open it in a browser to exercise the complete perps flow:
-connect a local wallet session, deposit/withdraw collateral, switch markets,
-open long/short positions, watch live mark-price movement, close positions, hit
-liquidation paths, and see reputation update with the same scoring model used by
-the Anchor program.
+The project now includes a React frontend in `frontend/`. Run it with Vite to
+exercise the complete perps flow: connect a local simulated wallet session,
+deposit/withdraw collateral, switch markets, open long/short positions, watch
+live mark-price movement, close positions, hit liquidation paths, and see
+reputation update with the same scoring model used by the Anchor program.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The React app also includes a Live Devnet tab that connects Phantom to a deployed
+program once `anchor build` has generated a fresh IDL.
 
 This frontend runs as a local terminal and simulation layer. The Anchor program
 now custody-moves SPL collateral through a protocol vault PDA, while oracle,
@@ -33,13 +41,13 @@ Collateral deposits and withdrawals move SPL tokens into and out of a protocol v
 
 Everything lives in PDAs. No arbitrary data storage, no mutable authority keys floating around.
 
-| Account | Seed | What it holds |
-|---|---|---|
-| `Protocol` | `["protocol"]` | Global state — authority pubkey, trader/market counts, next position ID |
-| `Market` | `["market", market_index u64 LE]` | Price, open interest, leverage cap, maintenance margin settings |
-| `TraderProfile` | `["trader", owner pubkey]` | Lifetime stats — trades, wins, losses, liquidations, PnL, reputation score |
-| `MarginAccount` | `["margin", owner pubkey]` | Collateral balance and how much of it is currently locked in positions |
-| `Position` | `["position", owner pubkey, position_id u64 LE]` | Everything about one open trade |
+| Account         | Seed                                             | What it holds                                                              |
+| --------------- | ------------------------------------------------ | -------------------------------------------------------------------------- |
+| `Protocol`      | `["protocol"]`                                   | Global state — authority pubkey, trader/market counts, next position ID    |
+| `Market`        | `["market", market_index u64 LE]`                | Price, open interest, leverage cap, maintenance margin settings            |
+| `TraderProfile` | `["trader", owner pubkey]`                       | Lifetime stats — trades, wins, losses, liquidations, PnL, reputation score |
+| `MarginAccount` | `["margin", owner pubkey]`                       | Collateral balance and how much of it is currently locked in positions     |
+| `Position`      | `["position", owner pubkey, position_id u64 LE]` | Everything about one open trade                                            |
 
 One thing worth noting: `position_id` comes from `protocol.next_position_id` which increments on every `open_position` call. This prevents anyone from passing an arbitrary ID that collides with an existing position PDA.
 
@@ -91,18 +99,19 @@ The leverage penalty kicks in if your average leverage exceeds 2x. Each liquidat
 
 Reputation also gates maximum leverage:
 
-| Score | Max leverage |
-|---|---:|
-| 0-79 | 2x |
-| 80-119 | 3x |
-| 120-179 | 4x |
-| 180+ | 5x |
+| Score   | Max leverage |
+| ------- | -----------: |
+| 0-79    |           2x |
+| 80-119  |           3x |
+| 120-179 |           4x |
+| 180+    |           5x |
 
 ---
 
 ## PnL and liquidation math
 
 **PnL calculation:**
+
 ```
 long PnL  = (current_price - entry_price) × size / entry_price
 short PnL = (entry_price - current_price) × size / entry_price
@@ -111,6 +120,7 @@ short PnL = (entry_price - current_price) × size / entry_price
 Position size is `collateral × leverage`, so a 500-unit collateral position at 2x leverage has size 1000. If you entered a long at 10,000 and the price moves to 11,000, your PnL is `(1000) × 1000 / 10000 = 100`.
 
 **Liquidation condition:**
+
 ```
 equity = collateral + pnl
 maintenance_margin = size × 625 / 10000   (6.25%)

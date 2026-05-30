@@ -1,6 +1,4 @@
 node_modules/
 target/
 .anchor/
-node_modules/
-target/
-.anchor/
+dist/

@@ -67,15 +67,15 @@ Run the keeper continuously:
 MARKET_INDICES=0 KEEPER_INTERVAL_MS=30000 RUN_FOREVER=true npm run keeper:funding
 ```
 
-Serve the repo root and open the live devnet console after `anchor build`
-generates a fresh IDL:
+Run the React frontend after `anchor build` generates a fresh IDL:
 
 ```bash
-cd ..
-python -m http.server 8080
+cd ../frontend
+npm install
+npm run dev
 ```
 
-Then open `http://localhost:8080/frontend/live-devnet.html`.
+Then open the Vite URL and switch to the Live Devnet tab.
 
 ## Mainnet Blockers
 

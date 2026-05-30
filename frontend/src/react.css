@@ -1,0 +1,109 @@
+.app-tabs {
+  display: grid;
+  grid-auto-flow: column;
+  border: 1px solid var(--line);
+}
+
+.app-tabs button {
+  min-width: 132px;
+  height: 38px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.app-tabs button:last-child {
+  border-right: 0;
+}
+
+.app-tabs button.active {
+  background: #1e2a35;
+  color: var(--text);
+}
+
+.terminal-account {
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  background: #0a0f14;
+  color: var(--text);
+  padding: 8px 10px;
+  outline: none;
+}
+
+.live-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 440px) 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.live-panel {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 12px;
+}
+
+.live-panel h2 {
+  margin-bottom: 12px;
+}
+
+.live-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.live-actions button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  background: #0d141b;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.live-actions .primary-action {
+  border: 0;
+  color: #00131f;
+}
+
+.live-state,
+.live-log {
+  min-height: 220px;
+  white-space: pre-wrap;
+  color: var(--muted);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.live-log-title {
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .live-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-tabs {
+    grid-auto-flow: row;
+  }
+
+  .app-tabs button {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}
