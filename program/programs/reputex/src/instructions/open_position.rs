@@ -80,6 +80,15 @@ pub fn handler(
     );
 
     let size = calculate_position_size(collateral_amount, leverage)?;
+    let initial_margin_requirement = size
+        .checked_mul(market.initial_margin_bps)
+        .ok_or(error!(ReputexError::MathOverflow))?
+        .checked_div(BASIS_POINTS)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    require!(
+        collateral_amount >= initial_margin_requirement,
+        ReputexError::InitialMarginTooLow
+    );
     let projected_long_size = if is_long {
         market
             .total_long_size

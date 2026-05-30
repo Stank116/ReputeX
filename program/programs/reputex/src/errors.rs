@@ -11,6 +11,9 @@ pub enum ReputexError {
     #[msg("Leverage exceeds the trader's reputation tier or market max")]
     InvalidLeverage,
 
+    #[msg("Collateral is below the market initial margin requirement")]
+    InitialMarginTooLow,
+
     #[msg("Price must be greater than zero")]
     InvalidPrice,
 

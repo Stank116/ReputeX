@@ -118,5 +118,6 @@ pub struct PositionLiquidated {
     pub market_index: u64,
     pub realized_pnl: i64,
     pub liquidation_reward: u64,
+    pub bad_debt: u64,
     pub insurance_fund_balance: u64,
 }

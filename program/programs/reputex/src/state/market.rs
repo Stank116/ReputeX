@@ -9,6 +9,7 @@ pub struct Market {
     pub symbol: String,
     pub price: u64,
     pub max_leverage: u8,
+    pub initial_margin_bps: u64,
     pub maintenance_margin_bps: u64,
     pub liquidation_fee_bps: u64,
     pub trading_fee_bps: u64,

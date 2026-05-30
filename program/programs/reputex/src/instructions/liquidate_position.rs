@@ -124,9 +124,15 @@ pub fn handler(
         .collateral_amount
         .checked_sub(liquidation_reward)
         .ok_or(error!(ReputexError::MathOverflow))?;
+    let equity = position.collateral_amount as i128 + pnl as i128;
+    let bad_debt = if equity < 0 { equity.unsigned_abs() as u64 } else { 0 };
     protocol.insurance_fund_balance = protocol
         .insurance_fund_balance
         .checked_add(insurance_remainder)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    protocol.total_bad_debt = protocol
+        .total_bad_debt
+        .checked_add(bad_debt)
         .ok_or(error!(ReputexError::MathOverflow))?;
 
     if liquidation_reward > 0 {
@@ -189,6 +195,7 @@ pub fn handler(
         market_index: position.market_index,
         realized_pnl: pnl,
         liquidation_reward,
+        bad_debt,
         insurance_fund_balance: protocol.insurance_fund_balance,
     });
 

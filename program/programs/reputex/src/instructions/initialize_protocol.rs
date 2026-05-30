@@ -43,6 +43,7 @@ pub fn handler(ctx: Context<InitializeProtocol>) -> Result<()> {
     protocol.collateral_mint = ctx.accounts.collateral_mint.key();
     protocol.collateral_vault = ctx.accounts.collateral_vault.key();
     protocol.insurance_fund_balance = 0;
+    protocol.total_bad_debt = 0;
     protocol.total_fees_collected = 0;
     protocol.total_traders = 0;
     protocol.total_markets = 0;

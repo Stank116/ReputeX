@@ -1,6 +1,7 @@
 pub const MIN_LEVERAGE: u8 = 1;
 pub const MAX_LEVERAGE: u8 = 5;
 pub const BASIS_POINTS: u64 = 10_000;
+pub const DEFAULT_INITIAL_MARGIN_BPS: u64 = 2_000; // 20%, equivalent to 5x max leverage.
 pub const DEFAULT_MAINTENANCE_MARGIN_BPS: u64 = 625; // 6.25%
 pub const DEFAULT_LIQUIDATION_FEE_BPS: u64 = 100;   // 1%
 pub const DEFAULT_TRADING_FEE_BPS: u64 = 10;        // 0.10%
