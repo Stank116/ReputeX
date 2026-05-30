@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReputeX Perps</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="terminal-shell">
+      <header class="topbar">
+        <section class="brand-block" aria-label="Protocol summary">
+          <div class="brand-mark">RX</div>
+          <div>
+            <h1>ReputeX</h1>
+            <p>Perpetuals DEX trading terminal</p>
+          </div>
+        </section>
+        <section class="account-strip" aria-label="Account state">
+          <div>
+            <span>Wallet</span>
+            <strong id="walletLabel">Disconnected</strong>
+          </div>
+          <div>
+            <span>Equity</span>
+            <strong id="equityLabel">$0.00</strong>
+          </div>
+          <div>
+            <span>Free</span>
+            <strong id="freeCollateralLabel">$0.00</strong>
+          </div>
+          <div>
+            <span>Reputation</span>
+            <strong id="reputationLabel">100</strong>
+          </div>
+          <button class="primary-action" id="walletButton" type="button">Connect</button>
+        </section>
+      </header>
+
+      <section class="market-row" aria-label="Market selector">
+        <div class="market-tabs" id="marketTabs"></div>
+        <div class="market-stats">
+          <div>
+            <span>Mark</span>
+            <strong id="markPrice">$0.00</strong>
+          </div>
+          <div>
+            <span>24h</span>
+            <strong id="change24h">0.00%</strong>
+          </div>
+          <div>
+            <span>Funding</span>
+            <strong id="fundingRate">0.000%</strong>
+          </div>
+          <div>
+            <span>Open interest</span>
+            <strong id="openInterest">$0.00</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <section class="chart-panel" aria-label="Price chart">
+          <div class="panel-heading">
+            <h2 id="chartTitle">SOL-PERP</h2>
+            <div class="segmented" role="group" aria-label="Chart timeframe">
+              <button class="segment active" type="button">1m</button>
+              <button class="segment" type="button">5m</button>
+              <button class="segment" type="button">1h</button>
+            </div>
+          </div>
+          <canvas id="priceChart" width="920" height="420"></canvas>
+          <div class="trade-tape" id="tradeTape"></div>
+        </section>
+
+        <aside class="book-panel" aria-label="Order book">
+          <div class="panel-heading compact">
+            <h2>Book</h2>
+            <span id="spreadLabel">0.00 bps</span>
+          </div>
+          <div class="book-grid">
+            <div class="book-side asks" id="askBook"></div>
+            <div class="book-mid" id="bookMid">$0.00</div>
+            <div class="book-side bids" id="bidBook"></div>
+          </div>
+        </aside>
+
+        <aside class="ticket-panel" aria-label="Order ticket">
+          <div class="side-toggle" role="group" aria-label="Trade side">
+            <button class="long active" id="longButton" type="button">Long</button>
+            <button class="short" id="shortButton" type="button">Short</button>
+          </div>
+          <label>
+            Collateral
+            <input id="collateralInput" min="1" step="1" type="number" value="500" />
+          </label>
+          <label>
+            Leverage
+            <input id="leverageInput" max="5" min="1" step="1" type="range" value="2" />
+            <span id="leverageLabel">2x</span>
+          </label>
+          <div class="ticket-preview">
+            <div><span>Size</span><strong id="sizePreview">$1,000.00</strong></div>
+            <div><span>Entry</span><strong id="entryPreview">$0.00</strong></div>
+            <div><span>Liq. price</span><strong id="liqPreview">$0.00</strong></div>
+            <div><span>Maintenance</span><strong id="maintenancePreview">$0.00</strong></div>
+          </div>
+          <button class="submit-order" id="submitOrder" type="button">Open Position</button>
+          <p class="ticket-message" id="ticketMessage" role="status"></p>
+        </aside>
+
+        <section class="portfolio-panel" aria-label="Portfolio">
+          <div class="panel-heading">
+            <h2>Portfolio</h2>
+            <div class="cash-controls">
+              <input id="cashInput" min="1" step="1" type="number" value="2500" aria-label="Collateral amount" />
+              <button id="depositButton" type="button">Deposit</button>
+              <button id="withdrawButton" type="button">Withdraw</button>
+            </div>
+          </div>
+          <div class="risk-strip">
+            <div>
+              <span>Balance</span>
+              <strong id="balanceLabel">$0.00</strong>
+            </div>
+            <div>
+              <span>Locked</span>
+              <strong id="lockedLabel">$0.00</strong>
+            </div>
+            <div>
+              <span>Realized PnL</span>
+              <strong id="realizedLabel">$0.00</strong>
+            </div>
+            <div>
+              <span>Win rate</span>
+              <strong id="winRateLabel">0.0%</strong>
+            </div>
+          </div>
+          <div class="positions-table">
+            <div class="table-header">
+              <span>Market</span>
+              <span>Side</span>
+              <span>Size</span>
+              <span>Entry</span>
+              <span>Mark</span>
+              <span>PnL</span>
+              <span>Health</span>
+              <span></span>
+            </div>
+            <div id="positionsBody"></div>
+          </div>
+        </section>
+
+        <section class="profile-panel" aria-label="Reputation profile">
+          <div class="panel-heading">
+            <h2>Reputation</h2>
+            <strong id="profileScore">100</strong>
+          </div>
+          <div class="score-meter"><span id="scoreMeter"></span></div>
+          <div class="profile-grid">
+            <div><span>Trades</span><strong id="tradesLabel">0</strong></div>
+            <div><span>Wins</span><strong id="winsLabel">0</strong></div>
+            <div><span>Losses</span><strong id="lossesLabel">0</strong></div>
+            <div><span>Liquidations</span><strong id="liquidationsLabel">0</strong></div>
+            <div><span>Volume</span><strong id="volumeLabel">$0.00</strong></div>
+            <div><span>Avg. lev.</span><strong id="avgLevLabel">0.00x</strong></div>
+          </div>
+          <div class="activity-log" id="activityLog"></div>
+        </section>
+      </section>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,31 @@
+use anchor_lang::prelude::*;
+
+#[error_code]
+pub enum ReputexError {
+    #[msg("Only the protocol authority can perform this action")]
+    Unauthorized,
+
+    #[msg("Amount must be greater than zero")]
+    InvalidAmount,
+
+    #[msg("Leverage must be between MIN_LEVERAGE and market max_leverage")]
+    InvalidLeverage,
+
+    #[msg("Price must be greater than zero")]
+    InvalidPrice,
+
+    #[msg("Insufficient free collateral")]
+    InsufficientFreeCollateral,
+
+    #[msg("Position id does not match the protocol counter")]
+    InvalidPositionId,
+
+    #[msg("Position is already closed")]
+    PositionClosed,
+
+    #[msg("Position is not liquidatable; equity is above maintenance margin")]
+    PositionNotLiquidatable,
+
+    #[msg("Math overflow or underflow")]
+    MathOverflow,
+}

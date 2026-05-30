@@ -1,0 +1,11 @@
+pub const MIN_LEVERAGE: u8 = 1;
+pub const MAX_LEVERAGE: u8 = 5;
+pub const BASIS_POINTS: u64 = 10_000;
+pub const DEFAULT_MAINTENANCE_MARGIN_BPS: u64 = 625; // 6.25%
+pub const DEFAULT_LIQUIDATION_FEE_BPS: u64 = 100;   // 1%
+pub const STARTING_REPUTATION_SCORE: u64 = 100;
+pub const PROTOCOL_SEED: &[u8] = b"protocol";
+pub const MARKET_SEED: &[u8] = b"market";
+pub const TRADER_SEED: &[u8] = b"trader";
+pub const MARGIN_SEED: &[u8] = b"margin";
+pub const POSITION_SEED: &[u8] = b"position";
