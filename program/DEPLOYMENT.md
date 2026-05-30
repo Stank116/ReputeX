@@ -43,6 +43,40 @@ anchor build
 solana program show <PROGRAM_ID> --url devnet
 ```
 
+Bootstrap the protocol, market, and optional Pyth oracle config:
+
+```bash
+COLLATERAL_MINT=<SPL_MINT> \
+MARKET_INDEX=0 \
+MARKET_SYMBOL=SOL-PERP \
+INITIAL_PRICE=100000000 \
+PYTH_FEED_ID=<32_BYTE_HEX_FEED_ID> \
+PRICE_DECIMALS=6 \
+npm run bootstrap:devnet
+```
+
+Run the funding keeper once:
+
+```bash
+MARKET_INDICES=0 npm run keeper:funding
+```
+
+Run the keeper continuously:
+
+```bash
+MARKET_INDICES=0 KEEPER_INTERVAL_MS=30000 RUN_FOREVER=true npm run keeper:funding
+```
+
+Serve the repo root and open the live devnet console after `anchor build`
+generates a fresh IDL:
+
+```bash
+cd ..
+python -m http.server 8080
+```
+
+Then open `http://localhost:8080/frontend/live-devnet.html`.
+
 ## Mainnet Blockers
 
 Do not accept real user deposits until these are done:
@@ -52,7 +86,7 @@ Do not accept real user deposits until these are done:
 - Validate every Pyth path on devnet with stale-price and wide-confidence failures.
 - Submit fresh oracle updates in frontend transactions before trading.
 - Build the real wallet frontend with Anchor client calls and token account
-  handling.
+  handling. The included `frontend/` is still a local simulator.
 - Use a multisig as protocol authority.
 - Decide and document upgrade authority policy.
 - Run a professional security audit and remediate findings.

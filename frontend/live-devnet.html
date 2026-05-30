@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReputeX Live Devnet Console</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      .live-grid {
+        display: grid;
+        grid-template-columns: minmax(320px, 440px) 1fr;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .live-panel {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        padding: 12px;
+      }
+
+      .live-panel h2 {
+        margin-bottom: 12px;
+      }
+
+      .live-actions {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .live-actions button {
+        min-height: 38px;
+        border: 1px solid var(--line);
+        background: #0d141b;
+        color: var(--text);
+        font-weight: 700;
+      }
+
+      .live-actions .primary-action {
+        border: 0;
+        color: #00131f;
+      }
+
+      .live-state,
+      .live-log {
+        min-height: 220px;
+        white-space: pre-wrap;
+        color: var(--muted);
+        font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      @media (max-width: 900px) {
+        .live-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="terminal-shell">
+      <header class="topbar">
+        <section class="brand-block" aria-label="Protocol summary">
+          <div class="brand-mark">RX</div>
+          <div>
+            <h1>ReputeX Live</h1>
+            <p>Devnet wallet console</p>
+          </div>
+        </section>
+        <section class="account-strip" aria-label="Connection state">
+          <div>
+            <span>Wallet</span>
+            <strong id="walletState">Disconnected</strong>
+          </div>
+          <div>
+            <span>Cluster</span>
+            <strong>Devnet</strong>
+          </div>
+          <button class="primary-action" id="connectWallet" type="button">
+            Connect
+          </button>
+        </section>
+      </header>
+
+      <section class="live-grid">
+        <section class="live-panel" aria-label="Live controls">
+          <h2>Transaction Console</h2>
+          <label>
+            RPC URL
+            <input id="rpcUrl" value="https://api.devnet.solana.com" />
+          </label>
+          <label>
+            Program ID
+            <input
+              id="programId"
+              value="5NEGduu9b3fKDokVzDRHPQcxCoLnFbQpWBtDjugoNqhy"
+            />
+          </label>
+          <label>
+            IDL path
+            <input id="idlPath" value="../program/target/idl/reputex.json" />
+          </label>
+          <label>
+            Owner token account
+            <input
+              id="ownerTokenAccount"
+              placeholder="SPL collateral token account"
+            />
+          </label>
+          <label>
+            Market index
+            <input id="marketIndex" min="0" step="1" type="number" value="0" />
+          </label>
+          <label>
+            Position ID
+            <input id="positionId" min="0" step="1" type="number" value="0" />
+          </label>
+          <label>
+            Amount / collateral
+            <input id="amount" min="1" step="1" type="number" value="100" />
+          </label>
+          <label>
+            Leverage
+            <input
+              id="leverage"
+              max="5"
+              min="1"
+              step="1"
+              type="number"
+              value="2"
+            />
+          </label>
+          <label>
+            Side
+            <select id="side">
+              <option value="long">Long</option>
+              <option value="short">Short</option>
+            </select>
+          </label>
+          <div class="live-actions">
+            <button class="primary-action" id="loadProgram" type="button">
+              Load
+            </button>
+            <button id="refreshState" type="button">Refresh</button>
+            <button id="createProfile" type="button">Create Profile</button>
+            <button id="deposit" type="button">Deposit</button>
+            <button id="withdraw" type="button">Withdraw</button>
+            <button id="openPosition" type="button">Open</button>
+            <button id="closePosition" type="button">Close</button>
+          </div>
+        </section>
+
+        <section class="live-panel" aria-label="Live state">
+          <h2>State</h2>
+          <div class="live-state" id="stateOutput">
+            Load the program to begin.
+          </div>
+          <h2 style="margin-top: 18px">Log</h2>
+          <div class="live-log" id="logOutput"></div>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="./live-devnet.js"></script>
+  </body>
+</html>

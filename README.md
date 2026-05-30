@@ -69,7 +69,7 @@ One thing worth noting: `position_id` comes from `protocol.next_position_id` whi
 
 **Permissionless:**
 
-- `liquidate_position(position_id, market_index)` — anyone can call this on any position that has fallen below its maintenance margin (6.25% of position size by default). The liquidated trader's collateral is wiped and their liquidation count goes up, which hits their reputation score hard.
+- `liquidate_position(position_id, market_index)` — anyone can call this on any position that has fallen below its maintenance margin (6.25% of position size by default). If the account still has positive equity, the instruction partially liquidates 50% of the position. If equity is exhausted, it fully liquidates the position, records bad debt when needed, and penalizes reputation.
 
 ---
 
@@ -117,6 +117,9 @@ maintenance_margin = size × 625 / 10000   (6.25%)
 
 position is liquidatable when: equity ≤ maintenance_margin
 ```
+
+Positive-equity liquidations reduce 50% of the position. Zero/negative-equity
+liquidations close the entire remaining position.
 
 ---
 

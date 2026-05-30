@@ -4,6 +4,7 @@ pub const BASIS_POINTS: u64 = 10_000;
 pub const DEFAULT_INITIAL_MARGIN_BPS: u64 = 2_000; // 20%, equivalent to 5x max leverage.
 pub const DEFAULT_MAINTENANCE_MARGIN_BPS: u64 = 625; // 6.25%
 pub const DEFAULT_LIQUIDATION_FEE_BPS: u64 = 100;   // 1%
+pub const PARTIAL_LIQUIDATION_BPS: u64 = 5_000;     // Close 50% of a position while it still has equity.
 pub const DEFAULT_TRADING_FEE_BPS: u64 = 10;        // 0.10%
 pub const DEFAULT_MAX_OPEN_INTEREST: u64 = 1_000_000_000_000;
 pub const DEFAULT_MAX_SKEW_BPS: u64 = 10_000; // 100%; markets can be tightened after bootstrap.

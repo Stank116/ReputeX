@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-use crate::constants::{BASIS_POINTS, PROTOCOL_SEED};
+use crate::constants::{BASIS_POINTS, PARTIAL_LIQUIDATION_BPS, PROTOCOL_SEED};
 use crate::errors::ReputexError;
 use crate::events::PositionLiquidated;
 use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
@@ -109,26 +109,60 @@ pub fn handler(
         ReputexError::PositionNotLiquidatable
     );
 
-    // Unlock and wipe the collateral (trader loses entire collateral on liquidation)
+    let full_liquidation = (position.collateral_amount as i128 + pnl as i128) <= 0
+        || position.collateral_amount <= 1
+        || position.size <= 1;
+    let collateral_liquidated = if full_liquidation {
+        position.collateral_amount
+    } else {
+        position
+            .collateral_amount
+            .checked_mul(PARTIAL_LIQUIDATION_BPS)
+            .ok_or(error!(ReputexError::MathOverflow))?
+            .checked_div(BASIS_POINTS)
+            .ok_or(error!(ReputexError::MathOverflow))?
+            .max(1)
+    };
+    let size_liquidated = if full_liquidation {
+        position.size
+    } else {
+        position
+            .size
+            .checked_mul(collateral_liquidated)
+            .ok_or(error!(ReputexError::MathOverflow))?
+            .checked_div(position.collateral_amount)
+            .ok_or(error!(ReputexError::MathOverflow))?
+            .max(1)
+    };
+    let realized_pnl = if full_liquidation {
+        pnl
+    } else {
+        let proportional_pnl = (pnl as i128)
+            .checked_mul(size_liquidated as i128)
+            .ok_or(error!(ReputexError::MathOverflow))?
+            .checked_div(position.size as i128)
+            .ok_or(error!(ReputexError::MathOverflow))?;
+        i64::try_from(proportional_pnl).map_err(|_| error!(ReputexError::MathOverflow))?
+    };
+
+    // Unlock the liquidated collateral slice. Full liquidation wipes all remaining collateral.
     margin.locked_collateral = margin
         .locked_collateral
-        .checked_sub(position.collateral_amount)
+        .checked_sub(collateral_liquidated)
         .ok_or(error!(ReputexError::MathOverflow))?;
     margin.collateral_balance = margin
         .collateral_balance
-        .saturating_sub(position.collateral_amount);
+        .saturating_sub(collateral_liquidated);
 
-    let liquidation_reward = position
-        .collateral_amount
+    let liquidation_reward = collateral_liquidated
         .checked_mul(market.liquidation_fee_bps)
         .ok_or(error!(ReputexError::MathOverflow))?
         .checked_div(BASIS_POINTS)
         .ok_or(error!(ReputexError::MathOverflow))?;
-    let insurance_remainder = position
-        .collateral_amount
+    let insurance_remainder = collateral_liquidated
         .checked_sub(liquidation_reward)
         .ok_or(error!(ReputexError::MathOverflow))?;
-    let equity = position.collateral_amount as i128 + pnl as i128;
+    let equity = collateral_liquidated as i128 + realized_pnl as i128;
     let bad_debt = if equity < 0 { equity.unsigned_abs() as u64 } else { 0 };
     protocol.insurance_fund_balance = protocol
         .insurance_fund_balance
@@ -156,9 +190,9 @@ pub fn handler(
 
     // Update open interest
     if position.is_long {
-        market.total_long_size = market.total_long_size.saturating_sub(position.size);
+        market.total_long_size = market.total_long_size.saturating_sub(size_liquidated);
     } else {
-        market.total_short_size = market.total_short_size.saturating_sub(position.size);
+        market.total_short_size = market.total_short_size.saturating_sub(size_liquidated);
     }
 
     // Update profile stats
@@ -166,8 +200,8 @@ pub fn handler(
     profile.total_trades = profile.total_trades.saturating_add(1);
     profile.losing_trades = profile.losing_trades.saturating_add(1);
     profile.liquidations = profile.liquidations.saturating_add(1);
-    profile.total_volume = profile.total_volume.saturating_add(position.size);
-    profile.realized_pnl = profile.realized_pnl.saturating_add(pnl);
+    profile.total_volume = profile.total_volume.saturating_add(size_liquidated);
+    profile.realized_pnl = profile.realized_pnl.saturating_add(realized_pnl);
 
     let new_leverage_x100 = position.leverage as u64 * 100;
     profile.avg_leverage_x100 = if previous_trades == 0 {
@@ -190,14 +224,34 @@ pub fn handler(
         profile.avg_leverage_x100,
     );
 
-    position.is_open = false;
+    let (remaining_collateral, remaining_size) = if full_liquidation {
+        position.is_open = false;
+        position.collateral_amount = 0;
+        position.size = 0;
+        (0, 0)
+    } else {
+        position.collateral_amount = position
+            .collateral_amount
+            .checked_sub(collateral_liquidated)
+            .ok_or(error!(ReputexError::MathOverflow))?;
+        position.size = position
+            .size
+            .checked_sub(size_liquidated)
+            .ok_or(error!(ReputexError::MathOverflow))?;
+        (position.collateral_amount, position.size)
+    };
 
     emit!(PositionLiquidated {
         owner: ctx.accounts.trader.key(),
         liquidator: ctx.accounts.liquidator.key(),
         position_id: position.position_id,
         market_index: position.market_index,
-        realized_pnl: pnl,
+        realized_pnl,
+        collateral_liquidated,
+        size_liquidated,
+        remaining_collateral,
+        remaining_size,
+        full_liquidation,
         liquidation_reward,
         bad_debt,
         insurance_fund_balance: protocol.insurance_fund_balance,

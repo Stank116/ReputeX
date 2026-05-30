@@ -9,7 +9,6 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { assert } from "chai";
-import { Reputex } from "../target/types/reputex";
 
 const TOKEN_PROGRAM_ID = new PublicKey(
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
@@ -20,7 +19,7 @@ const TOKEN_ACCOUNT_SIZE = 165;
 describe("reputex", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
 
-  const program = anchor.workspace.Reputex as Program<Reputex>;
+  const program = anchor.workspace.Reputex as Program<any>;
   const provider = anchor.getProvider() as anchor.AnchorProvider;
   const owner = provider.wallet.publicKey;
 
@@ -188,7 +187,7 @@ describe("reputex", () => {
       })
       .rpc();
 
-    const marketAccount = await program.account.market.fetch(market);
+    const marketAccount = await (program.account as any).market.fetch(market);
     assert.equal(marketAccount.symbol, "SOL-PERP");
     assert.equal(marketAccount.price.toNumber(), INITIAL_PRICE);
     assert.equal(marketAccount.maxSkewBps.toNumber(), 10_000);
@@ -200,7 +199,9 @@ describe("reputex", () => {
     assert.equal(marketAccount.priceDecimals, 0);
     assert.equal(marketAccount.oracleEnabled, false);
 
-    const protocolAccount = await program.account.protocol.fetch(protocol);
+    const protocolAccount = await (program.account as any).protocol.fetch(
+      protocol
+    );
     assert.equal(protocolAccount.totalMarkets.toNumber(), 1);
     assert.equal(protocolAccount.tradingPaused, false);
   });
@@ -220,7 +221,7 @@ describe("reputex", () => {
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
-    const marketAccount = await program.account.market.fetch(market);
+    const marketAccount = await (program.account as any).market.fetch(market);
     assert.deepEqual(Array.from(marketAccount.oracleFeedId), feedId);
     assert.equal(marketAccount.oracleMaxAgeSeconds.toNumber(), 45);
     assert.equal(marketAccount.oracleMaxConfidenceBps.toNumber(), 75);
@@ -277,7 +278,9 @@ describe("reputex", () => {
       })
       .rpc();
 
-    const margin = await program.account.marginAccount.fetch(marginAccount);
+    const margin = await (program.account as any).marginAccount.fetch(
+      marginAccount
+    );
     assert.equal(margin.collateralBalance.toNumber(), DEPOSIT);
     assert.equal(margin.lockedCollateral.toNumber(), 0);
     assert.equal(await tokenBalance(collateralVault), DEPOSIT);
@@ -294,12 +297,16 @@ describe("reputex", () => {
       })
       .rpc();
 
-    const protocolAccount = await program.account.protocol.fetch(protocol);
+    const protocolAccount = await (program.account as any).protocol.fetch(
+      protocol
+    );
     assert.equal(protocolAccount.insuranceFundBalance.toNumber(), 1_000);
     assert.equal(await tokenBalance(collateralVault), 2_000);
     assert.equal(await tokenBalance(ownerTokenAccount.publicKey), 8_000);
 
-    const profile = await program.account.traderProfile.fetch(traderProfile);
+    const profile = await (program.account as any).traderProfile.fetch(
+      traderProfile
+    );
     assert.equal(profile.reputationScore.toNumber(), 100); // STARTING_REPUTATION_SCORE
   });
 
@@ -338,7 +345,9 @@ describe("reputex", () => {
       .rpc();
 
     // Verify collateral is locked
-    let margin = await program.account.marginAccount.fetch(marginAccount);
+    let margin = await (program.account as any).marginAccount.fetch(
+      marginAccount
+    );
     assert.equal(margin.lockedCollateral.toNumber(), COLLATERAL);
 
     // Move price up → profitable for long
@@ -364,9 +373,13 @@ describe("reputex", () => {
       })
       .rpc();
 
-    const profile = await program.account.traderProfile.fetch(traderProfile);
-    margin = await program.account.marginAccount.fetch(marginAccount);
-    const closedPosition = await program.account.position.fetch(position);
+    const profile = await (program.account as any).traderProfile.fetch(
+      traderProfile
+    );
+    margin = await (program.account as any).marginAccount.fetch(marginAccount);
+    const closedPosition = await (program.account as any).position.fetch(
+      position
+    );
 
     // Assertions
     assert.equal(profile.totalTrades.toNumber(), 1);
@@ -378,7 +391,9 @@ describe("reputex", () => {
     assert.equal(margin.lockedCollateral.toNumber(), 0); // nothing locked
     assert.equal(closedPosition.isOpen, false);
 
-    const protocolAccount = await program.account.protocol.fetch(protocol);
+    const protocolAccount = await (program.account as any).protocol.fetch(
+      protocol
+    );
     assert.equal(protocolAccount.insuranceFundBalance.toNumber(), 911);
     assert.equal(protocolAccount.totalFeesCollected.toNumber(), 1);
   });
@@ -389,7 +404,7 @@ describe("reputex", () => {
       [Buffer.from("position"), owner.toBuffer(), u64Le(positionId)],
       program.programId
     );
-    const marginBefore = await program.account.marginAccount.fetch(
+    const marginBefore = await (program.account as any).marginAccount.fetch(
       marginAccount
     );
 
@@ -427,7 +442,7 @@ describe("reputex", () => {
       .accountsStrict({ protocol, authority: owner })
       .rpc();
 
-    const marginAfter = await program.account.marginAccount.fetch(
+    const marginAfter = await (program.account as any).marginAccount.fetch(
       marginAccount
     );
     assert.equal(
@@ -492,14 +507,14 @@ describe("reputex", () => {
   });
 
   it("settles funding from market state on the crank path", async () => {
-    const marketBefore = await program.account.market.fetch(market);
+    const marketBefore = await (program.account as any).market.fetch(market);
 
     await program.methods
       .settleFunding(new anchor.BN(marketIndex))
       .accountsStrict({ protocol, market })
       .rpc();
 
-    const marketAfter = await program.account.market.fetch(market);
+    const marketAfter = await (program.account as any).market.fetch(market);
     assert.equal(
       marketAfter.cumulativeFundingRateBps.toNumber(),
       marketBefore.cumulativeFundingRateBps.toNumber()
@@ -588,10 +603,10 @@ describe("reputex", () => {
       .rpc();
   });
 
-  it("liquidates an underwater position", async () => {
+  it("partially liquidates a position that still has positive equity", async () => {
     // Ensure enough free collateral (current price is still 11_000 from prev test)
     await program.methods
-      .depositCollateral(new anchor.BN(2_000))
+      .depositCollateral(new anchor.BN(1_000))
       .accountsStrict({
         protocol,
         marginAccount,
@@ -608,18 +623,13 @@ describe("reputex", () => {
       program.programId
     );
 
-    // Current reputation tier allows 3x leverage.
-    // Open long at current price (11_000), 3x leverage, 300 collateral.
-    // size = 300 * 3 = 900
-    // maintenance margin = 900 * 625 / 10000 = ~56.25
-    // We'll crash price to 1_000 to guarantee liquidation.
     await program.methods
       .openPosition(
         new anchor.BN(positionId),
         new anchor.BN(marketIndex),
         true, // long
         new anchor.BN(300),
-        3 // reputation-gated leverage
+        2
       )
       .accountsStrict({
         protocol,
@@ -632,13 +642,13 @@ describe("reputex", () => {
       })
       .rpc();
 
-    // Crash the price so the position is deeply underwater
+    // Drop price enough to breach maintenance, but leave positive equity.
     await program.methods
-      .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(1_000))
+      .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(5_800))
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
-    const profileBefore = await program.account.traderProfile.fetch(
+    const profileBefore = await (program.account as any).traderProfile.fetch(
       traderProfile
     );
     const liquidationsBefore = profileBefore.liquidations.toNumber();
@@ -660,8 +670,110 @@ describe("reputex", () => {
       })
       .rpc();
 
-    const profile = await program.account.traderProfile.fetch(traderProfile);
-    const liquidatedPosition = await program.account.position.fetch(position);
+    const profile = await (program.account as any).traderProfile.fetch(
+      traderProfile
+    );
+    const partialPosition = await (program.account as any).position.fetch(
+      position
+    );
+    const marketAfter = await (program.account as any).market.fetch(market);
+
+    assert.equal(profile.liquidations.toNumber(), liquidationsBefore + 1);
+    assert.equal(profile.totalTrades.toNumber(), tradesBefore + 1);
+    assert.equal(partialPosition.isOpen, true);
+    assert.equal(partialPosition.collateralAmount.toNumber(), 150);
+    assert.equal(partialPosition.size.toNumber(), 300);
+    assert.equal(marketAfter.totalLongSize.toNumber(), 300);
+
+    await program.methods
+      .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(11_000))
+      .accountsStrict({ protocol, market, authority: owner })
+      .rpc();
+
+    await program.methods
+      .closePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
+      .accountsStrict({
+        protocol,
+        market,
+        traderProfile,
+        marginAccount,
+        position,
+        owner,
+      })
+      .rpc();
+  });
+
+  it("liquidates an underwater position", async () => {
+    await program.methods
+      .depositCollateral(new anchor.BN(2_000))
+      .accountsStrict({
+        protocol,
+        marginAccount,
+        collateralVault,
+        ownerTokenAccount: ownerTokenAccount.publicKey,
+        owner,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const positionId = 3;
+    const [position] = PublicKey.findProgramAddressSync(
+      [Buffer.from("position"), owner.toBuffer(), u64Le(positionId)],
+      program.programId
+    );
+
+    await program.methods
+      .openPosition(
+        new anchor.BN(positionId),
+        new anchor.BN(marketIndex),
+        true,
+        new anchor.BN(300),
+        3
+      )
+      .accountsStrict({
+        protocol,
+        market,
+        traderProfile,
+        marginAccount,
+        position,
+        owner,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    await program.methods
+      .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(1_000))
+      .accountsStrict({ protocol, market, authority: owner })
+      .rpc();
+
+    const profileBefore = await (program.account as any).traderProfile.fetch(
+      traderProfile
+    );
+    const liquidationsBefore = profileBefore.liquidations.toNumber();
+    const tradesBefore = profileBefore.totalTrades.toNumber();
+
+    await program.methods
+      .liquidatePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
+      .accountsStrict({
+        protocol,
+        market,
+        traderProfile,
+        marginAccount,
+        position,
+        trader: owner,
+        liquidator: owner,
+        collateralVault,
+        liquidatorTokenAccount: ownerTokenAccount.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const profile = await (program.account as any).traderProfile.fetch(
+      traderProfile
+    );
+    const liquidatedPosition = await (program.account as any).position.fetch(
+      position
+    );
 
     assert.equal(profile.liquidations.toNumber(), liquidationsBefore + 1);
     assert.equal(profile.totalTrades.toNumber(), tradesBefore + 1);
@@ -669,10 +781,12 @@ describe("reputex", () => {
   });
 
   it("records bad debt instead of over-crediting insurance on oversized close losses", async () => {
-    const marginBeforeOpen = await program.account.marginAccount.fetch(
+    const marginBeforeOpen = await (program.account as any).marginAccount.fetch(
       marginAccount
     );
-    const protocolBeforeOpen = await program.account.protocol.fetch(protocol);
+    const protocolBeforeOpen = await (program.account as any).protocol.fetch(
+      protocol
+    );
     const freeCollateral =
       marginBeforeOpen.collateralBalance.toNumber() -
       marginBeforeOpen.lockedCollateral.toNumber();
@@ -683,7 +797,7 @@ describe("reputex", () => {
       return;
     }
 
-    const positionId = 3;
+    const positionId = 4;
     const [position] = PublicKey.findProgramAddressSync(
       [Buffer.from("position"), owner.toBuffer(), u64Le(positionId)],
       program.programId
@@ -713,10 +827,12 @@ describe("reputex", () => {
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
-    const marginAfterOpen = await program.account.marginAccount.fetch(
+    const marginAfterOpen = await (program.account as any).marginAccount.fetch(
       marginAccount
     );
-    const protocolAfterOpen = await program.account.protocol.fetch(protocol);
+    const protocolAfterOpen = await (program.account as any).protocol.fetch(
+      protocol
+    );
 
     await program.methods
       .closePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
@@ -730,10 +846,12 @@ describe("reputex", () => {
       })
       .rpc();
 
-    const marginAfterClose = await program.account.marginAccount.fetch(
+    const marginAfterClose = await (program.account as any).marginAccount.fetch(
       marginAccount
     );
-    const protocolAfterClose = await program.account.protocol.fetch(protocol);
+    const protocolAfterClose = await (program.account as any).protocol.fetch(
+      protocol
+    );
     const expectedCollectibleLoss =
       marginAfterOpen.collateralBalance.toNumber();
 
@@ -754,7 +872,7 @@ describe("reputex", () => {
   });
 
   it("withdraw collateral reduces balance correctly", async () => {
-    const marginBefore = await program.account.marginAccount.fetch(
+    const marginBefore = await (program.account as any).marginAccount.fetch(
       marginAccount
     );
     const freeCollateral =
@@ -779,7 +897,7 @@ describe("reputex", () => {
       })
       .rpc();
 
-    const marginAfter = await program.account.marginAccount.fetch(
+    const marginAfter = await (program.account as any).marginAccount.fetch(
       marginAccount
     );
     assert.equal(

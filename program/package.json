@@ -2,6 +2,8 @@
   "license": "ISC",
   "scripts": {
     "test": "node node_modules/ts-mocha/bin/ts-mocha -p ./tsconfig.json -t 1000000 \"tests/**/*.ts\"",
+    "bootstrap:devnet": "node node_modules/ts-node/dist/bin.js scripts/bootstrap_devnet.ts",
+    "keeper:funding": "node node_modules/ts-node/dist/bin.js scripts/funding_keeper.ts",
     "lint:fix": "node node_modules/prettier/bin-prettier.js \"**/*.{js,ts,json,md}\" -w",
     "lint": "node node_modules/prettier/bin-prettier.js \"**/*.{js,ts,json,md}\" --check"
   },
