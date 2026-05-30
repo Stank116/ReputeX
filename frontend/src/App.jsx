@@ -842,6 +842,7 @@ function LiveDevnetConsole() {
     programId: "5NEGduu9b3fKDokVzDRHPQcxCoLnFbQpWBtDjugoNqhy",
     idlPath: "/program/target/idl/reputex.json",
     ownerTokenAccount: "",
+    priceUpdateAccount: "",
     marketIndex: 0,
     positionId: 0,
     amount: 100,
@@ -1003,6 +1004,12 @@ function LiveDevnetConsole() {
           placeholder="SPL collateral token account"
         />
         <LiveInput
+          label="Pyth price update"
+          value={form.priceUpdateAccount}
+          onChange={(value) => setField("priceUpdateAccount", value)}
+          placeholder="PriceUpdateV2 account"
+        />
+        <LiveInput
           label="Market index"
           type="number"
           value={form.marketIndex}
@@ -1110,6 +1117,39 @@ function LiveDevnetConsole() {
           <button
             type="button"
             onClick={() =>
+              send("refresh pyth price", () => {
+                const a = derivePdas();
+                return program.methods
+                  .updateMarketPriceFromPyth(liveMarketIndex())
+                  .accountsStrict({
+                    protocol: a.protocol,
+                    market: a.market,
+                    priceUpdate: new PublicKey(form.priceUpdateAccount),
+                  });
+              }).catch((error) => log(error.message))
+            }
+          >
+            Refresh Pyth
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              send("settle funding", () => {
+                const a = derivePdas();
+                return program.methods
+                  .settleFunding(liveMarketIndex())
+                  .accountsStrict({
+                    protocol: a.protocol,
+                    market: a.market,
+                  });
+              }).catch((error) => log(error.message))
+            }
+          >
+            Settle Funding
+          </button>
+          <button
+            type="button"
+            onClick={() =>
               send("open position", () => {
                 const a = derivePdas();
                 return program.methods
@@ -1153,6 +1193,32 @@ function LiveDevnetConsole() {
             }
           >
             Close
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              send("liquidate position", () => {
+                const a = derivePdas();
+                return program.methods
+                  .liquidatePosition(livePositionId(), liveMarketIndex())
+                  .accountsStrict({
+                    protocol: a.protocol,
+                    market: a.market,
+                    traderProfile: a.traderProfile,
+                    marginAccount: a.marginAccount,
+                    position: a.position,
+                    trader: a.owner,
+                    liquidator: a.owner,
+                    collateralVault: a.collateralVault,
+                    liquidatorTokenAccount: new PublicKey(
+                      form.ownerTokenAccount
+                    ),
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                  });
+              }).catch((error) => log(error.message))
+            }
+          >
+            Liquidate
           </button>
         </div>
       </section>
