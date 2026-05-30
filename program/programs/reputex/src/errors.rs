@@ -8,7 +8,7 @@ pub enum ReputexError {
     #[msg("Amount must be greater than zero")]
     InvalidAmount,
 
-    #[msg("Leverage must be between MIN_LEVERAGE and market max_leverage")]
+    #[msg("Leverage exceeds the trader's reputation tier or market max")]
     InvalidLeverage,
 
     #[msg("Price must be greater than zero")]

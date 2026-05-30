@@ -106,6 +106,14 @@ function activeMarket() {
   return markets[state.activeMarket];
 }
 
+function reputationLeverageCap(score, marketMax) {
+  let reputationCap = 5;
+  if (score < 80) reputationCap = 2;
+  else if (score < 120) reputationCap = 3;
+  else if (score < 180) reputationCap = 4;
+  return Math.min(reputationCap, marketMax);
+}
+
 function positionPnl(position) {
   const mark = markets[position.marketIndex].price;
   const delta = position.isLong ? mark - position.entryPrice : position.entryPrice - mark;
@@ -158,7 +166,10 @@ function openPosition() {
   const leverage = Number(el("leverageInput").value);
 
   if (!Number.isFinite(collateral) || collateral <= 0) return showMessage("Collateral must be above zero.");
-  if (leverage < 1 || leverage > market.maxLev) return showMessage(`Max leverage for ${market.symbol} is ${market.maxLev}x.`);
+  const allowedLeverage = reputationLeverageCap(state.profile.reputationScore, market.maxLev);
+  if (leverage < 1 || leverage > allowedLeverage) {
+    return showMessage(`Current reputation allows up to ${allowedLeverage}x on ${market.symbol}.`);
+  }
   if (freeCollateral() < collateral) return showMessage("Insufficient free collateral.");
 
   const position = {
@@ -385,8 +396,9 @@ function bookRow(price, size, maxSize) {
 function renderTicket() {
   const market = activeMarket();
   const collateral = Math.max(Number(el("collateralInput").value) || 0, 0);
-  const leverage = Math.min(Number(el("leverageInput").value) || 1, market.maxLev);
-  el("leverageInput").max = market.maxLev;
+  const maxLeverage = reputationLeverageCap(state.profile.reputationScore, market.maxLev);
+  const leverage = Math.min(Number(el("leverageInput").value) || 1, maxLeverage);
+  el("leverageInput").max = maxLeverage;
   el("leverageInput").value = leverage;
   const size = collateral * leverage;
   el("leverageLabel").textContent = `${leverage}x`;

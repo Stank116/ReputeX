@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 use crate::constants::MIN_LEVERAGE;
 use crate::errors::ReputexError;
 use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
-use crate::utils::calculate_position_size;
+use crate::utils::{calculate_position_size, max_leverage_for_reputation};
 
 #[derive(Accounts)]
 #[instruction(position_id: u64, market_index: u64)]
@@ -61,8 +61,11 @@ pub fn handler(
 ) -> Result<()> {
     let protocol = &mut ctx.accounts.protocol;
     let market = &mut ctx.accounts.market;
+    let profile = &mut ctx.accounts.trader_profile;
     let margin = &mut ctx.accounts.margin_account;
     let position = &mut ctx.accounts.position;
+    let max_allowed_leverage =
+        max_leverage_for_reputation(profile.reputation_score, market.max_leverage);
 
     require!(
         position_id == protocol.next_position_id,
@@ -70,7 +73,7 @@ pub fn handler(
     );
     require!(collateral_amount > 0, ReputexError::InvalidAmount);
     require!(
-        leverage >= MIN_LEVERAGE && leverage <= market.max_leverage,
+        leverage >= MIN_LEVERAGE && leverage <= max_allowed_leverage,
         ReputexError::InvalidLeverage
     );
     require!(

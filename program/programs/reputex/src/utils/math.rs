@@ -94,3 +94,15 @@ pub fn reputation_score(
         .saturating_sub(liquidation_penalty)
         .saturating_sub(leverage_penalty)
 }
+
+/// Reputation-gated leverage tiers, capped by the market max.
+pub fn max_leverage_for_reputation(reputation_score: u64, market_max_leverage: u8) -> u8 {
+    let reputation_cap = match reputation_score {
+        0..=79 => 2,
+        80..=119 => 3,
+        120..=179 => 4,
+        _ => 5,
+    };
+
+    reputation_cap.min(market_max_leverage)
+}

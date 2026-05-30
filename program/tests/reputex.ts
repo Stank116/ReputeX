@@ -246,12 +246,10 @@ describe("reputex", () => {
       program.programId
     );
 
-    // Open long at current price (11_000), 5× leverage, 300 collateral
-    // size = 300 * 5 = 1500
-    // maintenance margin = 1500 * 625 / 10000 = ~93.75 → 93
-    // liquidated when equity ≤ 93  →  pnl ≤ 93 - 300 = -207
-    // price must drop enough: pnl = (p - 11000)*1500/11000 ≤ -207
-    //   → p ≤ 11000 - (207*11000/1500) ≈ 11000 - 1518 ≈ 9482
+    // Current reputation tier allows 3x leverage.
+    // Open long at current price (11_000), 3x leverage, 300 collateral.
+    // size = 300 * 3 = 900
+    // maintenance margin = 900 * 625 / 10000 = ~56.25
     // We'll crash price to 1_000 to guarantee liquidation.
     await program.methods
       .openPosition(
@@ -259,7 +257,7 @@ describe("reputex", () => {
         new anchor.BN(marketIndex),
         true, // long
         new anchor.BN(300),
-        5 // 5x leverage (market max)
+        3 // reputation-gated leverage
       )
       .accounts({
         protocol,
