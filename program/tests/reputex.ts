@@ -45,7 +45,7 @@ describe("reputex", () => {
   it("initializes protocol and market", async () => {
     await program.methods
       .initializeProtocol()
-      .accounts({
+      .accountsStrict({
         protocol,
         authority: owner,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -59,7 +59,7 @@ describe("reputex", () => {
         "SOL-PERP",
         new anchor.BN(INITIAL_PRICE)
       )
-      .accounts({
+      .accountsStrict({
         protocol,
         market,
         authority: owner,
@@ -78,7 +78,7 @@ describe("reputex", () => {
   it("creates a trader profile and deposits mock collateral", async () => {
     await program.methods
       .createTraderProfile()
-      .accounts({
+      .accountsStrict({
         protocol,
         traderProfile,
         marginAccount,
@@ -90,7 +90,7 @@ describe("reputex", () => {
     const DEPOSIT = 1_000;
     await program.methods
       .depositCollateral(new anchor.BN(DEPOSIT))
-      .accounts({
+      .accountsStrict({
         marginAccount,
         owner,
       })
@@ -126,7 +126,7 @@ describe("reputex", () => {
         new anchor.BN(COLLATERAL),
         LEVERAGE
       )
-      .accounts({
+      .accountsStrict({
         protocol,
         market,
         traderProfile,
@@ -144,12 +144,12 @@ describe("reputex", () => {
     // Move price up → profitable for long
     await program.methods
       .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(EXIT_PRICE))
-      .accounts({ protocol, market, authority: owner })
+      .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
     await program.methods
       .closePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
-      .accounts({
+      .accountsStrict({
         market,
         traderProfile,
         marginAccount,
@@ -177,7 +177,7 @@ describe("reputex", () => {
     // Deposit fresh collateral and open a safe position
     await program.methods
       .depositCollateral(new anchor.BN(500))
-      .accounts({ marginAccount, owner })
+      .accountsStrict({ marginAccount, owner })
       .rpc();
 
     const positionId = 1;
@@ -194,7 +194,7 @@ describe("reputex", () => {
         new anchor.BN(300),
         2
       )
-      .accounts({
+      .accountsStrict({
         protocol,
         market,
         traderProfile,
@@ -212,7 +212,7 @@ describe("reputex", () => {
           new anchor.BN(positionId),
           new anchor.BN(marketIndex)
         )
-        .accounts({
+        .accountsStrict({
           market,
           traderProfile,
           marginAccount,
@@ -229,7 +229,7 @@ describe("reputex", () => {
     // Clean up — close the healthy position so state is consistent for next test
     await program.methods
       .closePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
-      .accounts({ market, traderProfile, marginAccount, position, owner })
+      .accountsStrict({ market, traderProfile, marginAccount, position, owner })
       .rpc();
   });
 
@@ -237,7 +237,7 @@ describe("reputex", () => {
     // Ensure enough free collateral (current price is still 11_000 from prev test)
     await program.methods
       .depositCollateral(new anchor.BN(2_000))
-      .accounts({ marginAccount, owner })
+      .accountsStrict({ marginAccount, owner })
       .rpc();
 
     const positionId = 2;
@@ -259,7 +259,7 @@ describe("reputex", () => {
         new anchor.BN(300),
         3 // reputation-gated leverage
       )
-      .accounts({
+      .accountsStrict({
         protocol,
         market,
         traderProfile,
@@ -273,7 +273,7 @@ describe("reputex", () => {
     // Crash the price so the position is deeply underwater
     await program.methods
       .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(1_000))
-      .accounts({ protocol, market, authority: owner })
+      .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
     const profileBefore = await program.account.traderProfile.fetch(
@@ -284,7 +284,7 @@ describe("reputex", () => {
 
     await program.methods
       .liquidatePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
-      .accounts({
+      .accountsStrict({
         market,
         traderProfile,
         marginAccount,
@@ -318,7 +318,7 @@ describe("reputex", () => {
     const WITHDRAW = Math.min(100, freeCollateral);
     await program.methods
       .withdrawCollateral(new anchor.BN(WITHDRAW))
-      .accounts({ marginAccount, owner })
+      .accountsStrict({ marginAccount, owner })
       .rpc();
 
     const marginAfter = await program.account.marginAccount.fetch(

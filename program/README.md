@@ -43,7 +43,7 @@ One thing worth noting: `position_id` comes from `protocol.next_position_id` whi
 - `create_trader_profile` — initialises your TraderProfile and MarginAccount in one transaction.
 - `deposit_collateral(amount)` — adds to your margin balance.
 - `withdraw_collateral(amount)` — withdraws free (unlocked) collateral.
-- `open_position(position_id, market_index, is_long, collateral_amount, leverage)` — locks collateral and opens a long or short. Leverage must be between 1 and the market's `max_leverage` (currently 5x).
+- `open_position(position_id, market_index, is_long, collateral_amount, leverage)` — locks collateral and opens a long or short. Leverage must be between 1 and the lower of the market's `max_leverage` and the trader's reputation tier.
 - `close_position(position_id, market_index)` — settles your position at current price, applies PnL to your balance, and updates your reputation.
 
 **Permissionless:**
@@ -68,7 +68,14 @@ score = 100
 
 The leverage penalty kicks in if your average leverage exceeds 2x. Each liquidation costs 30 points. High win rate and consistent volume push the score up over time.
 
-Future versions could gate leverage tiers to specific score thresholds — the infrastructure is already there in `TraderProfile`.
+Reputation also gates maximum leverage:
+
+| Score   | Max leverage |
+| ------- | -----------: |
+| 0-79    |           2x |
+| 80-119  |           3x |
+| 120-179 |           4x |
+| 180+    |           5x |
 
 ---
 
@@ -214,4 +221,4 @@ program/
 - **No real token transfers.** Collateral is tracked as a u64 balance inside `MarginAccount`, not as actual USDC or SOL. Adding SPL transfers would require `anchor_spl` and Associated Token Account handling.
 - **Single admin oracle.** `update_market_price` is gated to the protocol authority. A production version would use Pyth price feeds.
 - **No funding rates.** Long/short open interest is tracked but no funding rate mechanism is implemented yet.
-- **Max leverage is fixed at 5x.** It's a constant in `constants.rs`. Reputation-gated leverage tiers are the obvious next feature.
+- **Market max leverage is capped at 5x.** The effective max is lower for traders whose reputation tier has not unlocked the full market cap.
