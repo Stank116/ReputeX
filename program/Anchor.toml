@@ -3,10 +3,10 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-reputex = "5NEGduu9b3fKDokVzDRHPQcxCoLnFbQpWBtDjugoNqhy"
+reputex = "EcKorS8y9kXHXQDjzN9eBYuhKqtdDFhypD9ceYfFKpfH"
 
 [programs.devnet]
-reputex = "5NEGduu9b3fKDokVzDRHPQcxCoLnFbQpWBtDjugoNqhy"
+reputex = "EcKorS8y9kXHXQDjzN9eBYuhKqtdDFhypD9ceYfFKpfH"
 
 [registry]
 url = "https://api.apr.dev"

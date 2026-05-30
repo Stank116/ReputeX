@@ -1,3 +1,5 @@
+#![allow(ambiguous_glob_reexports)]
+
 use anchor_lang::prelude::*;
 
 pub mod constants;
@@ -7,9 +9,9 @@ pub mod instructions;
 pub mod state;
 pub mod utils;
 
-use instructions::*;
+pub use instructions::*;
 
-declare_id!("5NEGduu9b3fKDokVzDRHPQcxCoLnFbQpWBtDjugoNqhy");
+declare_id!("EcKorS8y9kXHXQDjzN9eBYuhKqtdDFhypD9ceYfFKpfH");
 
 #[program]
 pub mod reputex {
@@ -50,14 +52,6 @@ pub mod reputex {
         new_price: u64,
     ) -> Result<()> {
         update_market_price::handler(ctx, market_index, new_price)
-    }
-
-    #[cfg(feature = "pyth")]
-    pub fn update_market_price_from_pyth(
-        ctx: Context<UpdateMarketPriceFromPyth>,
-        market_index: u64,
-    ) -> Result<()> {
-        update_market_price_from_pyth::handler(ctx, market_index)
     }
 
     pub fn update_funding_rate(

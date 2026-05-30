@@ -258,7 +258,7 @@ program/
 
 ## Known limitations
 
-- **Pyth path is feature-gated.** Local/devnet tests still use `update_market_price`; production builds can enable the `pyth` feature and use `update_market_price_from_pyth` with a configured feed id, freshness limit, and confidence limit.
+- **Oracle config is on-chain; Pyth entrypoint needs final build validation.** Local/devnet tests still use `update_market_price`; production should wire the configured feed id, freshness limit, and confidence limit through a Pyth `PriceUpdateV2` instruction after validating Anchor macro compatibility.
 - **Funding has a crank path, but keepers are still needed.** Funding payments are settled through a cumulative funding index and can be advanced from long/short skew with `settle_funding`.
 - **Market max leverage is capped at 5x.** The effective max is lower for traders whose reputation tier has not unlocked the full market cap.
 - **Not audited.** Do not put real user funds at risk until this has independent security review, oracle review, and deployment/runbook hardening.

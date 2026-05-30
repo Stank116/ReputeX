@@ -81,7 +81,7 @@ Then open the Vite URL and switch to the Live Devnet tab.
 
 Do not accept real user deposits until these are done:
 
-- Build and test production artifacts with the `pyth` feature enabled.
+- Build and test the production Pyth `PriceUpdateV2` entrypoint against the selected Anchor/Pyth SDK versions.
 - Configure one Pyth feed id per market with `configure_market_oracle`.
 - Validate every Pyth path on devnet with stale-price and wide-confidence failures.
 - Submit fresh oracle updates in frontend transactions before trading.

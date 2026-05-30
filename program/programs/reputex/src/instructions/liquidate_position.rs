@@ -74,6 +74,8 @@ pub fn handler(
     _position_id: u64,
     _market_index: u64,
 ) -> Result<()> {
+    let protocol_account_info = ctx.accounts.protocol.to_account_info();
+    let protocol_bump = ctx.accounts.protocol.bump;
     let market = &mut ctx.accounts.market;
     let profile = &mut ctx.accounts.trader_profile;
     let margin = &mut ctx.accounts.margin_account;
@@ -174,11 +176,11 @@ pub fn handler(
         .ok_or(error!(ReputexError::MathOverflow))?;
 
     if liquidation_reward > 0 {
-        let signer_seeds: &[&[&[u8]]] = &[&[PROTOCOL_SEED, &[protocol.bump]]];
+        let signer_seeds: &[&[&[u8]]] = &[&[PROTOCOL_SEED, &[protocol_bump]]];
         let cpi_accounts = Transfer {
             from: ctx.accounts.collateral_vault.to_account_info(),
             to: ctx.accounts.liquidator_token_account.to_account_info(),
-            authority: ctx.accounts.protocol.to_account_info(),
+            authority: protocol_account_info,
         };
         let cpi_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),

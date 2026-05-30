@@ -1,5 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
+import BN from "bn.js";
 import {
   Keypair,
   PublicKey,
@@ -15,6 +16,7 @@ const TOKEN_PROGRAM_ID = new PublicKey(
 );
 const MINT_SIZE = 82;
 const TOKEN_ACCOUNT_SIZE = 165;
+const bn = (value: number | string) => new BN(value);
 
 describe("reputex", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
@@ -174,11 +176,7 @@ describe("reputex", () => {
 
     const INITIAL_PRICE = 10_000;
     await program.methods
-      .initializeMarket(
-        new anchor.BN(marketIndex),
-        "SOL-PERP",
-        new anchor.BN(INITIAL_PRICE)
-      )
+      .initializeMarket(bn(marketIndex), "SOL-PERP", bn(INITIAL_PRICE))
       .accountsStrict({
         protocol,
         market,
@@ -210,14 +208,7 @@ describe("reputex", () => {
     const feedId = Array.from({ length: 32 }, (_, index) => index + 1);
 
     await program.methods
-      .configureMarketOracle(
-        new anchor.BN(marketIndex),
-        feedId,
-        new anchor.BN(45),
-        new anchor.BN(75),
-        6,
-        true
-      )
+      .configureMarketOracle(bn(marketIndex), feedId, bn(45), bn(75), 6, true)
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
@@ -230,7 +221,7 @@ describe("reputex", () => {
 
     try {
       await program.methods
-        .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(10_250))
+        .updateMarketPrice(bn(marketIndex), bn(10_250))
         .accountsStrict({ protocol, market, authority: owner })
         .rpc();
       assert.fail(
@@ -241,14 +232,7 @@ describe("reputex", () => {
     }
 
     await program.methods
-      .configureMarketOracle(
-        new anchor.BN(marketIndex),
-        feedId,
-        new anchor.BN(45),
-        new anchor.BN(75),
-        6,
-        false
-      )
+      .configureMarketOracle(bn(marketIndex), feedId, bn(45), bn(75), 6, false)
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
   });
@@ -267,7 +251,7 @@ describe("reputex", () => {
 
     const DEPOSIT = 1_000;
     await program.methods
-      .depositCollateral(new anchor.BN(DEPOSIT))
+      .depositCollateral(bn(DEPOSIT))
       .accountsStrict({
         protocol,
         marginAccount,
@@ -287,7 +271,7 @@ describe("reputex", () => {
     assert.equal(await tokenBalance(ownerTokenAccount.publicKey), 9_000);
 
     await program.methods
-      .fundInsurance(new anchor.BN(1_000))
+      .fundInsurance(bn(1_000))
       .accountsStrict({
         protocol,
         collateralVault,
@@ -327,10 +311,10 @@ describe("reputex", () => {
 
     await program.methods
       .openPosition(
-        new anchor.BN(positionId),
-        new anchor.BN(marketIndex),
+        bn(positionId),
+        bn(marketIndex),
         true, // long
-        new anchor.BN(COLLATERAL),
+        bn(COLLATERAL),
         LEVERAGE
       )
       .accountsStrict({
@@ -352,17 +336,17 @@ describe("reputex", () => {
 
     // Move price up → profitable for long
     await program.methods
-      .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(EXIT_PRICE))
+      .updateMarketPrice(bn(marketIndex), bn(EXIT_PRICE))
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
     await program.methods
-      .updateFundingRate(new anchor.BN(marketIndex), new anchor.BN(100))
+      .updateFundingRate(bn(marketIndex), bn(100))
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
     await program.methods
-      .closePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
+      .closePosition(bn(positionId), bn(marketIndex))
       .accountsStrict({
         protocol,
         market,
@@ -415,13 +399,7 @@ describe("reputex", () => {
 
     try {
       await program.methods
-        .openPosition(
-          new anchor.BN(positionId),
-          new anchor.BN(marketIndex),
-          true,
-          new anchor.BN(100),
-          2
-        )
+        .openPosition(bn(positionId), bn(marketIndex), true, bn(100), 2)
         .accountsStrict({
           protocol,
           market,
@@ -461,24 +439,18 @@ describe("reputex", () => {
 
     await program.methods
       .configureMarketRisk(
-        new anchor.BN(marketIndex),
-        new anchor.BN(1_000_000_000_000),
-        new anchor.BN(5_000),
-        new anchor.BN(100),
-        new anchor.BN(1)
+        bn(marketIndex),
+        bn(1_000_000_000_000),
+        bn(5_000),
+        bn(100),
+        bn(1)
       )
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
     try {
       await program.methods
-        .openPosition(
-          new anchor.BN(positionId),
-          new anchor.BN(marketIndex),
-          true,
-          new anchor.BN(100),
-          2
-        )
+        .openPosition(bn(positionId), bn(marketIndex), true, bn(100), 2)
         .accountsStrict({
           protocol,
           market,
@@ -496,11 +468,11 @@ describe("reputex", () => {
 
     await program.methods
       .configureMarketRisk(
-        new anchor.BN(marketIndex),
-        new anchor.BN(1_000_000_000_000),
-        new anchor.BN(10_000),
-        new anchor.BN(100),
-        new anchor.BN(1)
+        bn(marketIndex),
+        bn(1_000_000_000_000),
+        bn(10_000),
+        bn(100),
+        bn(1)
       )
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
@@ -510,7 +482,7 @@ describe("reputex", () => {
     const marketBefore = await (program.account as any).market.fetch(market);
 
     await program.methods
-      .settleFunding(new anchor.BN(marketIndex))
+      .settleFunding(bn(marketIndex))
       .accountsStrict({ protocol, market })
       .rpc();
 
@@ -528,7 +500,7 @@ describe("reputex", () => {
   it("cannot liquidate a healthy position", async () => {
     // Deposit fresh collateral and open a safe position
     await program.methods
-      .depositCollateral(new anchor.BN(500))
+      .depositCollateral(bn(500))
       .accountsStrict({
         protocol,
         marginAccount,
@@ -546,13 +518,7 @@ describe("reputex", () => {
     );
 
     await program.methods
-      .openPosition(
-        new anchor.BN(positionId),
-        new anchor.BN(marketIndex),
-        true,
-        new anchor.BN(300),
-        2
-      )
+      .openPosition(bn(positionId), bn(marketIndex), true, bn(300), 2)
       .accountsStrict({
         protocol,
         market,
@@ -567,10 +533,7 @@ describe("reputex", () => {
     // Attempt to liquidate immediately — should fail because position is healthy
     try {
       await program.methods
-        .liquidatePosition(
-          new anchor.BN(positionId),
-          new anchor.BN(marketIndex)
-        )
+        .liquidatePosition(bn(positionId), bn(marketIndex))
         .accountsStrict({
           protocol,
           market,
@@ -591,7 +554,7 @@ describe("reputex", () => {
 
     // Clean up — close the healthy position so state is consistent for next test
     await program.methods
-      .closePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
+      .closePosition(bn(positionId), bn(marketIndex))
       .accountsStrict({
         protocol,
         market,
@@ -606,7 +569,7 @@ describe("reputex", () => {
   it("partially liquidates a position that still has positive equity", async () => {
     // Ensure enough free collateral (current price is still 11_000 from prev test)
     await program.methods
-      .depositCollateral(new anchor.BN(1_000))
+      .depositCollateral(bn(1_000))
       .accountsStrict({
         protocol,
         marginAccount,
@@ -625,10 +588,10 @@ describe("reputex", () => {
 
     await program.methods
       .openPosition(
-        new anchor.BN(positionId),
-        new anchor.BN(marketIndex),
+        bn(positionId),
+        bn(marketIndex),
         true, // long
-        new anchor.BN(300),
+        bn(300),
         2
       )
       .accountsStrict({
@@ -644,7 +607,7 @@ describe("reputex", () => {
 
     // Drop price enough to breach maintenance, but leave positive equity.
     await program.methods
-      .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(5_800))
+      .updateMarketPrice(bn(marketIndex), bn(5_800))
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
@@ -655,7 +618,7 @@ describe("reputex", () => {
     const tradesBefore = profileBefore.totalTrades.toNumber();
 
     await program.methods
-      .liquidatePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
+      .liquidatePosition(bn(positionId), bn(marketIndex))
       .accountsStrict({
         protocol,
         market,
@@ -686,12 +649,12 @@ describe("reputex", () => {
     assert.equal(marketAfter.totalLongSize.toNumber(), 300);
 
     await program.methods
-      .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(11_000))
+      .updateMarketPrice(bn(marketIndex), bn(11_000))
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
     await program.methods
-      .closePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
+      .closePosition(bn(positionId), bn(marketIndex))
       .accountsStrict({
         protocol,
         market,
@@ -705,7 +668,7 @@ describe("reputex", () => {
 
   it("liquidates an underwater position", async () => {
     await program.methods
-      .depositCollateral(new anchor.BN(2_000))
+      .depositCollateral(bn(2_000))
       .accountsStrict({
         protocol,
         marginAccount,
@@ -723,13 +686,7 @@ describe("reputex", () => {
     );
 
     await program.methods
-      .openPosition(
-        new anchor.BN(positionId),
-        new anchor.BN(marketIndex),
-        true,
-        new anchor.BN(300),
-        3
-      )
+      .openPosition(bn(positionId), bn(marketIndex), true, bn(300), 3)
       .accountsStrict({
         protocol,
         market,
@@ -742,7 +699,7 @@ describe("reputex", () => {
       .rpc();
 
     await program.methods
-      .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(1_000))
+      .updateMarketPrice(bn(marketIndex), bn(1_000))
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
@@ -753,7 +710,7 @@ describe("reputex", () => {
     const tradesBefore = profileBefore.totalTrades.toNumber();
 
     await program.methods
-      .liquidatePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
+      .liquidatePosition(bn(positionId), bn(marketIndex))
       .accountsStrict({
         protocol,
         market,
@@ -804,13 +761,7 @@ describe("reputex", () => {
     );
 
     await program.methods
-      .openPosition(
-        new anchor.BN(positionId),
-        new anchor.BN(marketIndex),
-        true,
-        new anchor.BN(collateral),
-        2
-      )
+      .openPosition(bn(positionId), bn(marketIndex), true, bn(collateral), 2)
       .accountsStrict({
         protocol,
         market,
@@ -823,7 +774,7 @@ describe("reputex", () => {
       .rpc();
 
     await program.methods
-      .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(1))
+      .updateMarketPrice(bn(marketIndex), bn(1))
       .accountsStrict({ protocol, market, authority: owner })
       .rpc();
 
@@ -835,7 +786,7 @@ describe("reputex", () => {
     );
 
     await program.methods
-      .closePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
+      .closePosition(bn(positionId), bn(marketIndex))
       .accountsStrict({
         protocol,
         market,
@@ -886,7 +837,7 @@ describe("reputex", () => {
 
     const WITHDRAW = Math.min(100, freeCollateral);
     await program.methods
-      .withdrawCollateral(new anchor.BN(WITHDRAW))
+      .withdrawCollateral(bn(WITHDRAW))
       .accountsStrict({
         protocol,
         marginAccount,
