@@ -227,6 +227,22 @@ describe("reputex", () => {
     assert.equal(await tokenBalance(collateralVault), DEPOSIT);
     assert.equal(await tokenBalance(ownerTokenAccount.publicKey), 9_000);
 
+    await program.methods
+      .fundInsurance(new anchor.BN(1_000))
+      .accountsStrict({
+        protocol,
+        collateralVault,
+        funderTokenAccount: ownerTokenAccount.publicKey,
+        funder: owner,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const protocolAccount = await program.account.protocol.fetch(protocol);
+    assert.equal(protocolAccount.insuranceFundBalance.toNumber(), 1_000);
+    assert.equal(await tokenBalance(collateralVault), 2_000);
+    assert.equal(await tokenBalance(ownerTokenAccount.publicKey), 8_000);
+
     const profile = await program.account.traderProfile.fetch(traderProfile);
     assert.equal(profile.reputationScore.toNumber(), 100); // STARTING_REPUTATION_SCORE
   });
@@ -243,7 +259,8 @@ describe("reputex", () => {
     const ENTRY_PRICE = 10_000;
     const EXIT_PRICE = 11_000;
     // size = 500 * 2 = 1000
-    // pnl  = (11000 - 10000) * 1000 / 10000 = 100
+    // price pnl = (11000 - 10000) * 1000 / 10000 = 100
+    // funding pnl = -10 after a +100 bps cumulative funding update
 
     await program.methods
       .openPosition(
@@ -275,8 +292,14 @@ describe("reputex", () => {
       .rpc();
 
     await program.methods
+      .updateFundingRate(new anchor.BN(marketIndex), new anchor.BN(100))
+      .accountsStrict({ protocol, market, authority: owner })
+      .rpc();
+
+    await program.methods
       .closePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
       .accountsStrict({
+        protocol,
         market,
         traderProfile,
         marginAccount,
@@ -293,11 +316,15 @@ describe("reputex", () => {
     assert.equal(profile.totalTrades.toNumber(), 1);
     assert.equal(profile.winningTrades.toNumber(), 1);
     assert.equal(profile.losingTrades.toNumber(), 0);
-    assert.equal(profile.realizedPnl.toNumber(), 100); // +100 profit
+    assert.equal(profile.realizedPnl.toNumber(), 90); // +100 price pnl - 10 funding
     assert.equal(profile.avgLeverageX100.toNumber(), 200); // 2x = 200
-    assert.equal(margin.collateralBalance.toNumber(), 1_100); // 1000 + 100 pnl
+    assert.equal(margin.collateralBalance.toNumber(), 1_089); // 1000 - 1 fee + 90 net pnl
     assert.equal(margin.lockedCollateral.toNumber(), 0); // nothing locked
     assert.equal(closedPosition.isOpen, false);
+
+    const protocolAccount = await program.account.protocol.fetch(protocol);
+    assert.equal(protocolAccount.insuranceFundBalance.toNumber(), 911);
+    assert.equal(protocolAccount.totalFeesCollected.toNumber(), 1);
   });
 
   it("cannot liquidate a healthy position", async () => {
@@ -367,7 +394,14 @@ describe("reputex", () => {
     // Clean up — close the healthy position so state is consistent for next test
     await program.methods
       .closePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
-      .accountsStrict({ market, traderProfile, marginAccount, position, owner })
+      .accountsStrict({
+        protocol,
+        market,
+        traderProfile,
+        marginAccount,
+        position,
+        owner,
+      })
       .rpc();
   });
 

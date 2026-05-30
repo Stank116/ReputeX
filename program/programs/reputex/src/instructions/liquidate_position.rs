@@ -4,12 +4,13 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use crate::constants::{BASIS_POINTS, PROTOCOL_SEED};
 use crate::errors::ReputexError;
 use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
-use crate::utils::{calculate_pnl, is_liquidatable, reputation_score};
+use crate::utils::{calculate_funding_pnl, calculate_pnl, is_liquidatable, reputation_score};
 
 #[derive(Accounts)]
 #[instruction(position_id: u64, market_index: u64)]
 pub struct LiquidatePosition<'info> {
     #[account(
+        mut,
         seeds = [PROTOCOL_SEED],
         bump = protocol.bump
     )]
@@ -73,16 +74,25 @@ pub fn handler(
     let profile = &mut ctx.accounts.trader_profile;
     let margin = &mut ctx.accounts.margin_account;
     let position = &mut ctx.accounts.position;
-    let protocol = &ctx.accounts.protocol;
+    let protocol = &mut ctx.accounts.protocol;
 
     require!(position.is_open, ReputexError::PositionClosed);
 
-    let pnl = calculate_pnl(
+    let price_pnl = calculate_pnl(
         position.is_long,
         position.size,
         position.entry_price,
         market.price,
     )?;
+    let funding_pnl = calculate_funding_pnl(
+        position.is_long,
+        position.size,
+        position.entry_funding_rate_bps,
+        market.cumulative_funding_rate_bps,
+    )?;
+    let pnl = price_pnl
+        .checked_add(funding_pnl)
+        .ok_or(error!(ReputexError::MathOverflow))?;
 
     require!(
         is_liquidatable(
@@ -108,6 +118,14 @@ pub fn handler(
         .checked_mul(market.liquidation_fee_bps)
         .ok_or(error!(ReputexError::MathOverflow))?
         .checked_div(BASIS_POINTS)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    let insurance_remainder = position
+        .collateral_amount
+        .checked_sub(liquidation_reward)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    protocol.insurance_fund_balance = protocol
+        .insurance_fund_balance
+        .checked_add(insurance_remainder)
         .ok_or(error!(ReputexError::MathOverflow))?;
 
     if liquidation_reward > 0 {

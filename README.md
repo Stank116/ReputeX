@@ -52,6 +52,8 @@ One thing worth noting: `position_id` comes from `protocol.next_position_id` whi
 - `initialize_protocol` — sets up the Protocol PDA and SPL collateral vault. Call this once after deploying with the collateral mint you want to accept.
 - `initialize_market(market_index, symbol, initial_price)` — creates a new market. Market index 0 is typically SOL-PERP.
 - `update_market_price(market_index, new_price)` — moves the oracle price. On mainnet you'd replace this with a Pyth feed; on devnet this lets tests drive prices.
+- `update_funding_rate(market_index, funding_delta_bps)` — updates the cumulative funding index used when positions close or liquidate.
+- `fund_insurance(amount)` — transfers SPL collateral into the protocol vault and credits the insurance fund used to pay profitable PnL.
 
 **Trader instructions** — any wallet can call these for themselves:
 
@@ -232,6 +234,6 @@ program/
 ## Known limitations
 
 - **Single admin oracle.** `update_market_price` is gated to the protocol authority. A production version should use Pyth or another battle-tested oracle feed with staleness/confidence checks.
-- **No funding rates.** Long/short open interest is tracked but no funding rate mechanism is implemented yet.
+- **Funding is admin-updated.** Funding payments are settled through a cumulative funding index and the insurance fund, but production should automate the update cadence from market skew.
 - **Market max leverage is capped at 5x.** The effective max is lower for traders whose reputation tier has not unlocked the full market cap.
 - **Not audited.** Do not put real user funds at risk until this has independent security review, oracle review, and deployment/runbook hardening.

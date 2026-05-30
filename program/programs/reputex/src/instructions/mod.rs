@@ -1,19 +1,23 @@
 pub mod close_position;
 pub mod create_trader_profile;
 pub mod deposit_collateral;
+pub mod fund_insurance;
 pub mod initialize_market;
 pub mod initialize_protocol;
 pub mod liquidate_position;
 pub mod open_position;
+pub mod update_funding_rate;
 pub mod update_market_price;
 pub mod withdraw_collateral;
 
 pub use close_position::ClosePosition;
 pub use create_trader_profile::CreateTraderProfile;
 pub use deposit_collateral::DepositCollateral;
+pub use fund_insurance::FundInsurance;
 pub use initialize_market::InitializeMarket;
 pub use initialize_protocol::InitializeProtocol;
 pub use liquidate_position::LiquidatePosition;
 pub use open_position::OpenPosition;
+pub use update_funding_rate::UpdateFundingRate;
 pub use update_market_price::UpdateMarketPrice;
 pub use withdraw_collateral::WithdrawCollateral;

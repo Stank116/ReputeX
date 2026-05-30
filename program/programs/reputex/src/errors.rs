@@ -35,6 +35,12 @@ pub enum ReputexError {
     #[msg("Position is not liquidatable; equity is above maintenance margin")]
     PositionNotLiquidatable,
 
+    #[msg("Market open interest limit exceeded")]
+    OpenInterestLimitExceeded,
+
+    #[msg("Insurance fund cannot cover profitable PnL")]
+    InsufficientInsuranceFund,
+
     #[msg("Math overflow or underflow")]
     MathOverflow,
 }

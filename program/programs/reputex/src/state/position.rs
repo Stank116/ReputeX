@@ -10,6 +10,7 @@ pub struct Position {
     pub collateral_amount: u64,
     pub leverage: u8,
     pub entry_price: u64,
+    pub entry_funding_rate_bps: i64,
     pub size: u64,
     pub is_open: bool,
     pub bump: u8,

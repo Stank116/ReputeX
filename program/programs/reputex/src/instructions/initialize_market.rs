@@ -1,6 +1,9 @@
 use anchor_lang::prelude::*;
 
-use crate::constants::{DEFAULT_LIQUIDATION_FEE_BPS, DEFAULT_MAINTENANCE_MARGIN_BPS, MAX_LEVERAGE};
+use crate::constants::{
+    DEFAULT_LIQUIDATION_FEE_BPS, DEFAULT_MAINTENANCE_MARGIN_BPS, DEFAULT_MAX_OPEN_INTEREST,
+    DEFAULT_TRADING_FEE_BPS, MAX_LEVERAGE,
+};
 use crate::errors::ReputexError;
 use crate::state::{Market, Protocol};
 
@@ -52,6 +55,9 @@ pub fn handler(
     market.max_leverage = MAX_LEVERAGE;
     market.maintenance_margin_bps = DEFAULT_MAINTENANCE_MARGIN_BPS;
     market.liquidation_fee_bps = DEFAULT_LIQUIDATION_FEE_BPS;
+    market.trading_fee_bps = DEFAULT_TRADING_FEE_BPS;
+    market.max_open_interest = DEFAULT_MAX_OPEN_INTEREST;
+    market.cumulative_funding_rate_bps = 0;
     market.total_long_size = 0;
     market.total_short_size = 0;
     market.bump = ctx.bumps.market;

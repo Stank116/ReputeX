@@ -35,6 +35,10 @@ pub mod reputex {
         deposit_collateral::handler(ctx, amount)
     }
 
+    pub fn fund_insurance(ctx: Context<FundInsurance>, amount: u64) -> Result<()> {
+        fund_insurance::handler(ctx, amount)
+    }
+
     pub fn withdraw_collateral(ctx: Context<WithdrawCollateral>, amount: u64) -> Result<()> {
         withdraw_collateral::handler(ctx, amount)
     }
@@ -45,6 +49,14 @@ pub mod reputex {
         new_price: u64,
     ) -> Result<()> {
         update_market_price::handler(ctx, market_index, new_price)
+    }
+
+    pub fn update_funding_rate(
+        ctx: Context<UpdateFundingRate>,
+        market_index: u64,
+        funding_delta_bps: i64,
+    ) -> Result<()> {
+        update_funding_rate::handler(ctx, market_index, funding_delta_bps)
     }
 
     pub fn open_position(

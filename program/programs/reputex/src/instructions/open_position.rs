@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::constants::MIN_LEVERAGE;
+use crate::constants::{BASIS_POINTS, MIN_LEVERAGE};
 use crate::errors::ReputexError;
 use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
 use crate::utils::{calculate_position_size, max_leverage_for_reputation};
@@ -76,16 +76,48 @@ pub fn handler(
         leverage >= MIN_LEVERAGE && leverage <= max_allowed_leverage,
         ReputexError::InvalidLeverage
     );
-    require!(
-        margin.free_collateral() >= collateral_amount,
-        ReputexError::InsufficientFreeCollateral
-    );
 
     let size = calculate_position_size(collateral_amount, leverage)?;
+
+    require!(
+        market
+            .total_long_size
+            .checked_add(market.total_short_size)
+            .and_then(|open_interest| open_interest.checked_add(size))
+            .ok_or(error!(ReputexError::MathOverflow))?
+            <= market.max_open_interest,
+        ReputexError::OpenInterestLimitExceeded
+    );
+
+    let trading_fee = size
+        .checked_mul(market.trading_fee_bps)
+        .ok_or(error!(ReputexError::MathOverflow))?
+        .checked_div(BASIS_POINTS)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    let required_free_collateral = collateral_amount
+        .checked_add(trading_fee)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+
+    require!(
+        margin.free_collateral() >= required_free_collateral,
+        ReputexError::InsufficientFreeCollateral
+    );
 
     margin.locked_collateral = margin
         .locked_collateral
         .checked_add(collateral_amount)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    margin.collateral_balance = margin
+        .collateral_balance
+        .checked_sub(trading_fee)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    protocol.insurance_fund_balance = protocol
+        .insurance_fund_balance
+        .checked_add(trading_fee)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    protocol.total_fees_collected = protocol
+        .total_fees_collected
+        .checked_add(trading_fee)
         .ok_or(error!(ReputexError::MathOverflow))?;
 
     if is_long {
@@ -107,6 +139,7 @@ pub fn handler(
     position.collateral_amount = collateral_amount;
     position.leverage = leverage;
     position.entry_price = market.price;
+    position.entry_funding_rate_bps = market.cumulative_funding_rate_bps;
     position.size = size;
     position.is_open = true;
     position.bump = ctx.bumps.position;

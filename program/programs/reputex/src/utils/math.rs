@@ -63,6 +63,38 @@ pub fn is_liquidatable(
     Ok(equity <= maintenance)
 }
 
+pub fn calculate_funding_pnl(
+    is_long: bool,
+    position_size: u64,
+    entry_funding_rate_bps: i64,
+    current_funding_rate_bps: i64,
+) -> Result<i64> {
+    let funding_delta = current_funding_rate_bps
+        .checked_sub(entry_funding_rate_bps)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    let abs_delta = funding_delta.unsigned_abs();
+    let payment = position_size
+        .checked_mul(abs_delta)
+        .ok_or(error!(ReputexError::MathOverflow))?
+        .checked_div(BASIS_POINTS)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+    let signed_payment = i64::try_from(payment).map_err(|_| error!(ReputexError::MathOverflow))?;
+
+    if funding_delta >= 0 {
+        Ok(if is_long {
+            -signed_payment
+        } else {
+            signed_payment
+        })
+    } else {
+        Ok(if is_long {
+            signed_payment
+        } else {
+            -signed_payment
+        })
+    }
+}
+
 /// On-chain reputation score. Starts at STARTING_REPUTATION_SCORE (100).
 /// Increases with wins, experience, volume, and positive PnL.
 /// Decreases sharply with liquidations and high average leverage.

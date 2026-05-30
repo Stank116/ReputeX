@@ -1,12 +1,19 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::ReputexError;
-use crate::state::{MarginAccount, Market, Position, TraderProfile};
-use crate::utils::{calculate_pnl, reputation_score};
+use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
+use crate::utils::{calculate_funding_pnl, calculate_pnl, reputation_score};
 
 #[derive(Accounts)]
 #[instruction(position_id: u64, market_index: u64)]
 pub struct ClosePosition<'info> {
+    #[account(
+        mut,
+        seeds = [b"protocol"],
+        bump = protocol.bump
+    )]
+    pub protocol: Account<'info, Protocol>,
+
     #[account(
         mut,
         seeds = [b"market", &market_index.to_le_bytes()],
@@ -39,6 +46,7 @@ pub struct ClosePosition<'info> {
 }
 
 pub fn handler(ctx: Context<ClosePosition>, _position_id: u64, _market_index: u64) -> Result<()> {
+    let protocol = &mut ctx.accounts.protocol;
     let market = &mut ctx.accounts.market;
     let profile = &mut ctx.accounts.trader_profile;
     let margin = &mut ctx.accounts.margin_account;
@@ -46,12 +54,21 @@ pub fn handler(ctx: Context<ClosePosition>, _position_id: u64, _market_index: u6
 
     require!(position.is_open, ReputexError::PositionClosed);
 
-    let pnl = calculate_pnl(
+    let price_pnl = calculate_pnl(
         position.is_long,
         position.size,
         position.entry_price,
         market.price,
     )?;
+    let funding_pnl = calculate_funding_pnl(
+        position.is_long,
+        position.size,
+        position.entry_funding_rate_bps,
+        market.cumulative_funding_rate_bps,
+    )?;
+    let pnl = price_pnl
+        .checked_add(funding_pnl)
+        .ok_or(error!(ReputexError::MathOverflow))?;
 
     // Unlock collateral first
     margin.locked_collateral = margin
@@ -61,6 +78,14 @@ pub fn handler(ctx: Context<ClosePosition>, _position_id: u64, _market_index: u6
 
     // Apply PnL to balance
     if pnl >= 0 {
+        require!(
+            protocol.insurance_fund_balance >= pnl as u64,
+            ReputexError::InsufficientInsuranceFund
+        );
+        protocol.insurance_fund_balance = protocol
+            .insurance_fund_balance
+            .checked_sub(pnl as u64)
+            .ok_or(error!(ReputexError::MathOverflow))?;
         margin.collateral_balance = margin
             .collateral_balance
             .checked_add(pnl as u64)
@@ -70,6 +95,10 @@ pub fn handler(ctx: Context<ClosePosition>, _position_id: u64, _market_index: u6
         // Loss: subtract the absolute PnL from balance (collateral is already unlocked but still in balance)
         let loss = pnl.unsigned_abs();
         margin.collateral_balance = margin.collateral_balance.saturating_sub(loss);
+        protocol.insurance_fund_balance = protocol
+            .insurance_fund_balance
+            .checked_add(loss)
+            .ok_or(error!(ReputexError::MathOverflow))?;
         profile.losing_trades = profile.losing_trades.saturating_add(1);
     }
 
