@@ -1,8 +1,9 @@
 # ReputeX Deployment Runbook
 
-This program is suitable for local and devnet testing after the Anchor test suite
-passes. It is not ready for mainnet user funds until the oracle, frontend,
-security review, and operational controls below are completed.
+This program is suitable for local and devnet testing after `anchor build` and
+the Anchor test suite pass. It is not ready for mainnet user funds until the
+oracle flow is validated on devnet, security review is complete, and the
+operational controls below are in place.
 
 ## Current On-Chain Controls
 
@@ -72,6 +73,8 @@ Run the React frontend after `anchor build` generates a fresh IDL:
 ```bash
 cd ../frontend
 npm install
+mkdir -p public/idl
+cp ../program/target/idl/reputex.json public/idl/reputex.json
 npm run dev
 ```
 
@@ -81,12 +84,13 @@ Then open the Vite URL and switch to the Live Devnet tab.
 
 Do not accept real user deposits until these are done:
 
-- Build and test the production Pyth `PriceUpdateV2` entrypoint against the selected Anchor/Pyth SDK versions.
+- Run `anchor build` and `anchor test` with the Pyth `PriceUpdateV2` entrypoint enabled.
 - Configure one Pyth feed id per market with `configure_market_oracle`.
 - Validate every Pyth path on devnet with stale-price and wide-confidence failures.
-- Submit fresh oracle updates in frontend transactions before trading.
-- Build the real wallet frontend with Anchor client calls and token account
-  handling. The included `frontend/` is still a local simulator.
+- Submit fresh Pyth price updates to the receiver before calling the ReputeX
+  `update_market_price_from_pyth` instruction.
+- Exercise the React Live Devnet tab with Phantom for token account creation,
+  deposit, withdraw, open, close, and liquidation transactions.
 - Use a multisig as protocol authority.
 - Decide and document upgrade authority policy.
 - Run a professional security audit and remediate findings.

@@ -54,6 +54,13 @@ pub mod reputex {
         update_market_price::handler(ctx, market_index, new_price)
     }
 
+    pub fn update_market_price_from_pyth(
+        ctx: Context<UpdateMarketPriceFromPyth>,
+        market_index: u64,
+    ) -> Result<()> {
+        update_market_price_from_pyth::handler(ctx, market_index)
+    }
+
     pub fn update_funding_rate(
         ctx: Context<UpdateFundingRate>,
         market_index: u64,

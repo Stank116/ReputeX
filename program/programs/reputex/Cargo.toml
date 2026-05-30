@@ -9,7 +9,7 @@ crate-type = ["cdylib", "lib"]
 name = "reputex"
 
 [features]
-default = []
+default = ["pyth"]
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

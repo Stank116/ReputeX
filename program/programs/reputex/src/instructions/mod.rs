@@ -12,6 +12,7 @@ pub mod set_protocol_paused;
 pub mod settle_funding;
 pub mod update_funding_rate;
 pub mod update_market_price;
+pub mod update_market_price_from_pyth;
 pub mod withdraw_collateral;
 
 pub use close_position::*;
@@ -28,4 +29,5 @@ pub use set_protocol_paused::*;
 pub use settle_funding::*;
 pub use update_funding_rate::*;
 pub use update_market_price::*;
+pub use update_market_price_from_pyth::*;
 pub use withdraw_collateral::*;

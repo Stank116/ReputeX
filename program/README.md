@@ -15,6 +15,8 @@ transactions after a fresh IDL is generated with `anchor build`.
 ```bash
 cd ../frontend
 npm install
+mkdir -p public/idl
+cp ../program/target/idl/reputex.json public/idl/reputex.json
 npm run dev
 ```
 
@@ -50,7 +52,8 @@ One thing worth noting: `position_id` comes from `protocol.next_position_id` whi
 
 - `initialize_protocol` — sets up the Protocol PDA and SPL collateral vault. Call this once after deploying with the collateral mint you want to accept.
 - `initialize_market(market_index, symbol, initial_price)` — creates a new market. Market index 0 is typically SOL-PERP.
-- `update_market_price(market_index, new_price)` — moves the oracle price. On mainnet you'd replace this with a Pyth feed; on devnet this lets tests drive prices.
+- `update_market_price(market_index, new_price)` — moves the oracle price for local/admin devnet testing. This is blocked once oracle pricing is enabled for a market.
+- `update_market_price_from_pyth(market_index)` — reads a configured Pyth `PriceUpdateV2` account, validates feed id, freshness, confidence, positive price, and decimal normalization, then updates the market price.
 - `configure_market_oracle(market_index, oracle_feed_id, oracle_max_age_seconds, oracle_max_confidence_bps, price_decimals, oracle_enabled)` — stores the Pyth feed id and validation limits used by the oracle price path.
 - `update_funding_rate(market_index, funding_delta_bps)` — updates the cumulative funding index used when positions close or liquidate.
 - `settle_funding(market_index)` — permissionless crank that advances the cumulative funding index from long/short market skew.
@@ -249,7 +252,8 @@ program/
 
 ## Known limitations
 
-- **Oracle config is on-chain; Pyth entrypoint needs final build validation.** Local/devnet tests still use `update_market_price`; production should wire the configured feed id, freshness limit, and confidence limit through a Pyth `PriceUpdateV2` instruction after validating Anchor macro compatibility.
+- **Pyth oracle path is wired into the program.** Local tests still use `update_market_price` for deterministic price movement, while devnet/live usage should call `update_market_price_from_pyth` with a fresh `PriceUpdateV2` account before trading.
 - **Funding has a crank path, but keepers are still needed.** Funding payments are settled through a cumulative funding index and can be advanced from long/short skew with `settle_funding`.
+- **Frontend live trading needs devnet account configuration.** The React Live Devnet tab connects Phantom, derives PDAs, can create the owner associated token account, and sends deposit/withdraw/open/close/liquidate transactions after a fresh IDL is generated.
 - **Market max leverage is capped at 5x.** The effective max is lower for traders whose reputation tier has not unlocked the full market cap.
 - **Not audited.** Do not put real user funds at risk until this has independent security review, oracle review, and deployment/runbook hardening.

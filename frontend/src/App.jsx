@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as anchor from "@coral-xyz/anchor";
-import { Connection, PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  TransactionInstruction,
+} from "@solana/web3.js";
 
 const BASIS_POINTS = 10000;
 const MAINTENANCE_MARGIN_BPS = 625;
 const TOKEN_PROGRAM_ID = new PublicKey(
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+);
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 );
 
 const initialMarkets = [
@@ -107,6 +116,29 @@ function u64Le(value) {
   const buffer = new ArrayBuffer(8);
   new DataView(buffer).setBigUint64(0, BigInt(value), true);
   return new Uint8Array(buffer);
+}
+
+function associatedTokenAddress(owner, mint) {
+  return PublicKey.findProgramAddressSync(
+    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  )[0];
+}
+
+function createAssociatedTokenAccountInstruction(payer, owner, mint) {
+  const ata = associatedTokenAddress(owner, mint);
+  return new TransactionInstruction({
+    programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+    keys: [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: ata, isSigner: false, isWritable: true },
+      { pubkey: owner, isSigner: false, isWritable: false },
+      { pubkey: mint, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    data: new Uint8Array(),
+  });
 }
 
 function App() {
@@ -840,7 +872,7 @@ function LiveDevnetConsole() {
   const [form, setForm] = useState({
     rpcUrl: "https://api.devnet.solana.com",
     programId: "5NEGduu9b3fKDokVzDRHPQcxCoLnFbQpWBtDjugoNqhy",
-    idlPath: "/program/target/idl/reputex.json",
+    idlPath: "/idl/reputex.json",
     ownerTokenAccount: "",
     priceUpdateAccount: "",
     marketIndex: 0,
@@ -964,14 +996,67 @@ function LiveDevnetConsole() {
         output[name] = "not initialized";
       }
     }
+    if (output.protocol !== "not initialized") {
+      const collateralMint = new PublicKey(output.protocol.collateralMint);
+      const ownerAta = associatedTokenAddress(accounts.owner, collateralMint);
+      output.ownerAssociatedTokenAccount = ownerAta.toBase58();
+      setForm((current) =>
+        current.ownerTokenAccount
+          ? current
+          : { ...current, ownerTokenAccount: ownerAta.toBase58() }
+      );
+    }
     setStateOutput(JSON.stringify(output, null, 2));
   };
 
   const send = async (label, builder) => {
     if (!program || !provider) throw new Error("Load the program first");
-    const signature = await builder().rpc();
+    const transactionBuilder = await builder();
+    const signature = await transactionBuilder.rpc();
     log(`${label}: ${signature}`);
     await refreshState();
+  };
+
+  const sendTransaction = async (label, builder) => {
+    if (!program || !provider) throw new Error("Load the program first");
+    const transaction = await builder();
+    if (transaction.instructions.length === 0) {
+      await refreshState();
+      return;
+    }
+    const signature = await provider.sendAndConfirm(transaction);
+    log(`${label}: ${signature}`);
+    await refreshState();
+  };
+
+  const createOwnerTokenAccount = async () =>
+    sendTransaction("create owner token account", async () => {
+      const a = derivePdas();
+      const protocolAccount = await program.account.protocol.fetch(a.protocol);
+      const collateralMint = new PublicKey(protocolAccount.collateralMint);
+      const ownerAta = associatedTokenAddress(a.owner, collateralMint);
+      setField("ownerTokenAccount", ownerAta.toBase58());
+      const existing = await provider.connection.getAccountInfo(ownerAta);
+      if (existing) {
+        log(`Owner token account already exists ${ownerAta.toBase58()}`);
+        return new Transaction();
+      }
+      return new Transaction().add(
+        createAssociatedTokenAccountInstruction(a.owner, a.owner, collateralMint)
+      );
+    });
+
+  const withPythRefresh = async (transactionBuilder, accounts) => {
+    if (!form.priceUpdateAccount.trim()) return transactionBuilder;
+    const refreshIx = await program.methods
+      .updateMarketPriceFromPyth(liveMarketIndex())
+      .accountsStrict({
+        protocol: accounts.protocol,
+        market: accounts.market,
+        priceUpdate: new PublicKey(form.priceUpdateAccount),
+      })
+      .instruction();
+    return transactionBuilder.preInstructions([refreshIx]);
   };
 
   const liveAmount = () => new anchor.BN(Number(form.amount));
@@ -1056,6 +1141,14 @@ function LiveDevnetConsole() {
             onClick={() => refreshState().catch((error) => log(error.message))}
           >
             Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              createOwnerTokenAccount().catch((error) => log(error.message))
+            }
+          >
+            Create Token Account
           </button>
           <button
             type="button"
@@ -1150,9 +1243,9 @@ function LiveDevnetConsole() {
           <button
             type="button"
             onClick={() =>
-              send("open position", () => {
+              send("open position", async () => {
                 const a = derivePdas();
-                return program.methods
+                const tx = program.methods
                   .openPosition(
                     livePositionId(),
                     liveMarketIndex(),
@@ -1169,6 +1262,7 @@ function LiveDevnetConsole() {
                     owner: a.owner,
                     systemProgram: SystemProgram.programId,
                   });
+                return withPythRefresh(tx, a);
               }).catch((error) => log(error.message))
             }
           >
@@ -1177,9 +1271,9 @@ function LiveDevnetConsole() {
           <button
             type="button"
             onClick={() =>
-              send("close position", () => {
+              send("close position", async () => {
                 const a = derivePdas();
-                return program.methods
+                const tx = program.methods
                   .closePosition(livePositionId(), liveMarketIndex())
                   .accountsStrict({
                     protocol: a.protocol,
@@ -1189,6 +1283,7 @@ function LiveDevnetConsole() {
                     position: a.position,
                     owner: a.owner,
                   });
+                return withPythRefresh(tx, a);
               }).catch((error) => log(error.message))
             }
           >
@@ -1197,9 +1292,9 @@ function LiveDevnetConsole() {
           <button
             type="button"
             onClick={() =>
-              send("liquidate position", () => {
+              send("liquidate position", async () => {
                 const a = derivePdas();
-                return program.methods
+                const tx = program.methods
                   .liquidatePosition(livePositionId(), liveMarketIndex())
                   .accountsStrict({
                     protocol: a.protocol,
@@ -1215,6 +1310,7 @@ function LiveDevnetConsole() {
                     ),
                     tokenProgram: TOKEN_PROGRAM_ID,
                   });
+                return withPythRefresh(tx, a);
               }).catch((error) => log(error.message))
             }
           >
