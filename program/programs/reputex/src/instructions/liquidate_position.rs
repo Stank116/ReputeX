@@ -3,6 +3,7 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::constants::{BASIS_POINTS, PROTOCOL_SEED};
 use crate::errors::ReputexError;
+use crate::events::PositionLiquidated;
 use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
 use crate::utils::{calculate_funding_pnl, calculate_pnl, is_liquidatable, reputation_score};
 
@@ -180,6 +181,16 @@ pub fn handler(
     );
 
     position.is_open = false;
+
+    emit!(PositionLiquidated {
+        owner: ctx.accounts.trader.key(),
+        liquidator: ctx.accounts.liquidator.key(),
+        position_id: position.position_id,
+        market_index: position.market_index,
+        realized_pnl: pnl,
+        liquidation_reward,
+        insurance_fund_balance: protocol.insurance_fund_balance,
+    });
 
     Ok(())
 }

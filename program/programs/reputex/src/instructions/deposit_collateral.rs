@@ -3,6 +3,7 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::constants::{MARGIN_SEED, PROTOCOL_SEED};
 use crate::errors::ReputexError;
+use crate::events::CollateralDeposited;
 use crate::state::{MarginAccount, Protocol};
 
 #[derive(Accounts)]
@@ -54,6 +55,12 @@ pub fn handler(ctx: Context<DepositCollateral>, amount: u64) -> Result<()> {
         .collateral_balance
         .checked_add(amount)
         .ok_or(error!(ReputexError::MathOverflow))?;
+
+    emit!(CollateralDeposited {
+        owner: ctx.accounts.owner.key(),
+        amount,
+        margin_balance: margin.collateral_balance,
+    });
 
     Ok(())
 }

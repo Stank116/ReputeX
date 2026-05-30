@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 
 use crate::constants::{PROTOCOL_SEED, VAULT_SEED};
+use crate::events::ProtocolInitialized;
 use crate::state::Protocol;
 
 #[derive(Accounts)]
@@ -46,8 +47,15 @@ pub fn handler(ctx: Context<InitializeProtocol>) -> Result<()> {
     protocol.total_traders = 0;
     protocol.total_markets = 0;
     protocol.next_position_id = 0;
+    protocol.trading_paused = false;
     protocol.bump = ctx.bumps.protocol;
     protocol.vault_bump = ctx.bumps.collateral_vault;
+
+    emit!(ProtocolInitialized {
+        authority: protocol.authority,
+        collateral_mint: protocol.collateral_mint,
+        collateral_vault: protocol.collateral_vault,
+    });
 
     Ok(())
 }

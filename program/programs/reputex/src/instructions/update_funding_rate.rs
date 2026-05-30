@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::ReputexError;
+use crate::events::FundingRateUpdated;
 use crate::state::{Market, Protocol};
 
 #[derive(Accounts)]
@@ -32,6 +33,10 @@ pub fn handler(
         ctx.accounts.protocol.authority,
         ReputexError::Unauthorized
     );
+    require!(
+        funding_delta_bps.unsigned_abs() <= ctx.accounts.market.max_funding_rate_bps,
+        ReputexError::FundingRateTooLarge
+    );
 
     ctx.accounts.market.cumulative_funding_rate_bps = ctx
         .accounts
@@ -39,6 +44,14 @@ pub fn handler(
         .cumulative_funding_rate_bps
         .checked_add(funding_delta_bps)
         .ok_or(error!(ReputexError::MathOverflow))?;
+    ctx.accounts.market.last_funding_slot = Clock::get()?.slot;
+
+    emit!(FundingRateUpdated {
+        market_index: ctx.accounts.market.market_index,
+        funding_delta_bps,
+        cumulative_funding_rate_bps: ctx.accounts.market.cumulative_funding_rate_bps,
+        slot: ctx.accounts.market.last_funding_slot,
+    });
 
     Ok(())
 }

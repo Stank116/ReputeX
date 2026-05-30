@@ -191,9 +191,13 @@ describe("reputex", () => {
     const marketAccount = await program.account.market.fetch(market);
     assert.equal(marketAccount.symbol, "SOL-PERP");
     assert.equal(marketAccount.price.toNumber(), INITIAL_PRICE);
+    assert.equal(marketAccount.maxSkewBps.toNumber(), 10_000);
+    assert.equal(marketAccount.maxFundingRateBps.toNumber(), 100);
+    assert.equal(marketAccount.fundingIntervalSlots.toNumber(), 1);
 
     const protocolAccount = await program.account.protocol.fetch(protocol);
     assert.equal(protocolAccount.totalMarkets.toNumber(), 1);
+    assert.equal(protocolAccount.tradingPaused, false);
   });
 
   it("creates a trader profile and deposits SPL collateral", async () => {
@@ -325,6 +329,133 @@ describe("reputex", () => {
     const protocolAccount = await program.account.protocol.fetch(protocol);
     assert.equal(protocolAccount.insuranceFundBalance.toNumber(), 911);
     assert.equal(protocolAccount.totalFeesCollected.toNumber(), 1);
+  });
+
+  it("pauses new position opens without changing existing balances", async () => {
+    const positionId = 1;
+    const [position] = PublicKey.findProgramAddressSync(
+      [Buffer.from("position"), owner.toBuffer(), u64Le(positionId)],
+      program.programId
+    );
+    const marginBefore = await program.account.marginAccount.fetch(
+      marginAccount
+    );
+
+    await program.methods
+      .setProtocolPaused(true)
+      .accountsStrict({ protocol, authority: owner })
+      .rpc();
+
+    try {
+      await program.methods
+        .openPosition(
+          new anchor.BN(positionId),
+          new anchor.BN(marketIndex),
+          true,
+          new anchor.BN(100),
+          2
+        )
+        .accountsStrict({
+          protocol,
+          market,
+          traderProfile,
+          marginAccount,
+          position,
+          owner,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+      assert.fail("Expected open to fail while protocol trading is paused");
+    } catch (err: any) {
+      assert.include(err.toString(), "ProtocolPaused");
+    }
+
+    await program.methods
+      .setProtocolPaused(false)
+      .accountsStrict({ protocol, authority: owner })
+      .rpc();
+
+    const marginAfter = await program.account.marginAccount.fetch(
+      marginAccount
+    );
+    assert.equal(
+      marginAfter.collateralBalance.toNumber(),
+      marginBefore.collateralBalance.toNumber()
+    );
+    assert.equal(marginAfter.lockedCollateral.toNumber(), 0);
+  });
+
+  it("rejects openings that exceed configured skew limits", async () => {
+    const positionId = 1;
+    const [position] = PublicKey.findProgramAddressSync(
+      [Buffer.from("position"), owner.toBuffer(), u64Le(positionId)],
+      program.programId
+    );
+
+    await program.methods
+      .configureMarketRisk(
+        new anchor.BN(marketIndex),
+        new anchor.BN(1_000_000_000_000),
+        new anchor.BN(5_000),
+        new anchor.BN(100),
+        new anchor.BN(1)
+      )
+      .accountsStrict({ protocol, market, authority: owner })
+      .rpc();
+
+    try {
+      await program.methods
+        .openPosition(
+          new anchor.BN(positionId),
+          new anchor.BN(marketIndex),
+          true,
+          new anchor.BN(100),
+          2
+        )
+        .accountsStrict({
+          protocol,
+          market,
+          traderProfile,
+          marginAccount,
+          position,
+          owner,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
+      assert.fail("Expected open to fail on one-sided skew");
+    } catch (err: any) {
+      assert.include(err.toString(), "SkewLimitExceeded");
+    }
+
+    await program.methods
+      .configureMarketRisk(
+        new anchor.BN(marketIndex),
+        new anchor.BN(1_000_000_000_000),
+        new anchor.BN(10_000),
+        new anchor.BN(100),
+        new anchor.BN(1)
+      )
+      .accountsStrict({ protocol, market, authority: owner })
+      .rpc();
+  });
+
+  it("settles funding from market state on the crank path", async () => {
+    const marketBefore = await program.account.market.fetch(market);
+
+    await program.methods
+      .settleFunding(new anchor.BN(marketIndex))
+      .accountsStrict({ protocol, market })
+      .rpc();
+
+    const marketAfter = await program.account.market.fetch(market);
+    assert.equal(
+      marketAfter.cumulativeFundingRateBps.toNumber(),
+      marketBefore.cumulativeFundingRateBps.toNumber()
+    );
+    assert.isAtLeast(
+      marketAfter.lastFundingSlot.toNumber(),
+      marketBefore.lastFundingSlot.toNumber()
+    );
   });
 
   it("cannot liquidate a healthy position", async () => {

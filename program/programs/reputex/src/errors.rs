@@ -38,8 +38,23 @@ pub enum ReputexError {
     #[msg("Market open interest limit exceeded")]
     OpenInterestLimitExceeded,
 
+    #[msg("Market skew limit exceeded")]
+    SkewLimitExceeded,
+
     #[msg("Insurance fund cannot cover profitable PnL")]
     InsufficientInsuranceFund,
+
+    #[msg("Protocol trading is paused")]
+    ProtocolPaused,
+
+    #[msg("Risk parameter is outside the allowed range")]
+    InvalidRiskParameter,
+
+    #[msg("Funding update is too large for this market")]
+    FundingRateTooLarge,
+
+    #[msg("Funding interval has not elapsed")]
+    FundingNotReady,
 
     #[msg("Math overflow or underflow")]
     MathOverflow,

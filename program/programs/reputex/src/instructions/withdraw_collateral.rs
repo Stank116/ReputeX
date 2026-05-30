@@ -3,6 +3,7 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::constants::{MARGIN_SEED, PROTOCOL_SEED};
 use crate::errors::ReputexError;
+use crate::events::CollateralWithdrawn;
 use crate::state::{MarginAccount, Protocol};
 
 #[derive(Accounts)]
@@ -64,6 +65,12 @@ pub fn handler(ctx: Context<WithdrawCollateral>, amount: u64) -> Result<()> {
         signer_seeds,
     );
     token::transfer(cpi_ctx, amount)?;
+
+    emit!(CollateralWithdrawn {
+        owner: ctx.accounts.owner.key(),
+        amount,
+        margin_balance: margin.collateral_balance,
+    });
 
     Ok(())
 }

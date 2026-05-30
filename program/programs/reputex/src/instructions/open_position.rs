@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::{BASIS_POINTS, MIN_LEVERAGE};
 use crate::errors::ReputexError;
+use crate::events::PositionOpened;
 use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
 use crate::utils::{calculate_position_size, max_leverage_for_reputation};
 
@@ -67,6 +68,7 @@ pub fn handler(
     let max_allowed_leverage =
         max_leverage_for_reputation(profile.reputation_score, market.max_leverage);
 
+    require!(!protocol.trading_paused, ReputexError::ProtocolPaused);
     require!(
         position_id == protocol.next_position_id,
         ReputexError::InvalidPositionId
@@ -78,15 +80,43 @@ pub fn handler(
     );
 
     let size = calculate_position_size(collateral_amount, leverage)?;
-
-    require!(
+    let projected_long_size = if is_long {
         market
             .total_long_size
-            .checked_add(market.total_short_size)
-            .and_then(|open_interest| open_interest.checked_add(size))
+            .checked_add(size)
             .ok_or(error!(ReputexError::MathOverflow))?
-            <= market.max_open_interest,
+    } else {
+        market.total_long_size
+    };
+    let projected_short_size = if is_long {
+        market.total_short_size
+    } else {
+        market
+            .total_short_size
+            .checked_add(size)
+            .ok_or(error!(ReputexError::MathOverflow))?
+    };
+    let projected_open_interest = projected_long_size
+        .checked_add(projected_short_size)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+
+    require!(
+        projected_open_interest <= market.max_open_interest,
         ReputexError::OpenInterestLimitExceeded
+    );
+    let projected_skew_bps = if projected_open_interest == 0 {
+        0
+    } else {
+        projected_long_size
+            .abs_diff(projected_short_size)
+            .checked_mul(BASIS_POINTS)
+            .ok_or(error!(ReputexError::MathOverflow))?
+            .checked_div(projected_open_interest)
+            .ok_or(error!(ReputexError::MathOverflow))?
+    };
+    require!(
+        projected_skew_bps <= market.max_skew_bps,
+        ReputexError::SkewLimitExceeded
     );
 
     let trading_fee = size
@@ -145,6 +175,18 @@ pub fn handler(
     position.bump = ctx.bumps.position;
 
     protocol.next_position_id = protocol.next_position_id.saturating_add(1);
+
+    emit!(PositionOpened {
+        owner: ctx.accounts.owner.key(),
+        position_id,
+        market_index,
+        is_long,
+        collateral_amount,
+        size,
+        leverage,
+        entry_price: position.entry_price,
+        trading_fee,
+    });
 
     Ok(())
 }

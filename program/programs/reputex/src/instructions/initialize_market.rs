@@ -1,10 +1,12 @@
 use anchor_lang::prelude::*;
 
 use crate::constants::{
-    DEFAULT_LIQUIDATION_FEE_BPS, DEFAULT_MAINTENANCE_MARGIN_BPS, DEFAULT_MAX_OPEN_INTEREST,
+    DEFAULT_FUNDING_INTERVAL_SLOTS, DEFAULT_LIQUIDATION_FEE_BPS, DEFAULT_MAINTENANCE_MARGIN_BPS,
+    DEFAULT_MAX_FUNDING_RATE_BPS, DEFAULT_MAX_OPEN_INTEREST, DEFAULT_MAX_SKEW_BPS,
     DEFAULT_TRADING_FEE_BPS, MAX_LEVERAGE,
 };
 use crate::errors::ReputexError;
+use crate::events::MarketInitialized;
 use crate::state::{Market, Protocol};
 
 #[derive(Accounts)]
@@ -47,6 +49,7 @@ pub fn handler(
 
     let market = &mut ctx.accounts.market;
     let protocol = &mut ctx.accounts.protocol;
+    let current_slot = Clock::get()?.slot;
 
     market.authority = ctx.accounts.authority.key();
     market.market_index = market_index;
@@ -57,12 +60,23 @@ pub fn handler(
     market.liquidation_fee_bps = DEFAULT_LIQUIDATION_FEE_BPS;
     market.trading_fee_bps = DEFAULT_TRADING_FEE_BPS;
     market.max_open_interest = DEFAULT_MAX_OPEN_INTEREST;
+    market.max_skew_bps = DEFAULT_MAX_SKEW_BPS;
+    market.max_funding_rate_bps = DEFAULT_MAX_FUNDING_RATE_BPS;
+    market.funding_interval_slots = DEFAULT_FUNDING_INTERVAL_SLOTS;
+    market.last_funding_slot = current_slot;
+    market.last_price_update_slot = current_slot;
     market.cumulative_funding_rate_bps = 0;
     market.total_long_size = 0;
     market.total_short_size = 0;
     market.bump = ctx.bumps.market;
 
     protocol.total_markets = protocol.total_markets.saturating_add(1);
+
+    emit!(MarketInitialized {
+        market_index,
+        price: initial_price,
+        max_leverage: MAX_LEVERAGE,
+    });
 
     Ok(())
 }

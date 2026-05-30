@@ -3,6 +3,7 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::constants::PROTOCOL_SEED;
 use crate::errors::ReputexError;
+use crate::events::InsuranceFunded;
 use crate::state::Protocol;
 
 #[derive(Accounts)]
@@ -49,6 +50,12 @@ pub fn handler(ctx: Context<FundInsurance>, amount: u64) -> Result<()> {
         .insurance_fund_balance
         .checked_add(amount)
         .ok_or(error!(ReputexError::MathOverflow))?;
+
+    emit!(InsuranceFunded {
+        funder: ctx.accounts.funder.key(),
+        amount,
+        insurance_fund_balance: ctx.accounts.protocol.insurance_fund_balance,
+    });
 
     Ok(())
 }

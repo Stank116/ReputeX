@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::ReputexError;
+use crate::events::PositionClosed;
 use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
 use crate::utils::{calculate_funding_pnl, calculate_pnl, reputation_score};
 
@@ -138,6 +139,16 @@ pub fn handler(ctx: Context<ClosePosition>, _position_id: u64, _market_index: u6
     );
 
     position.is_open = false;
+
+    emit!(PositionClosed {
+        owner: ctx.accounts.owner.key(),
+        position_id: position.position_id,
+        market_index: position.market_index,
+        price_pnl,
+        funding_pnl,
+        realized_pnl: pnl,
+        margin_balance: margin.collateral_balance,
+    });
 
     Ok(())
 }

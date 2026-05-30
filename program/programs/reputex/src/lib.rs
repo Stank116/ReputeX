@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 pub mod constants;
 pub mod errors;
+pub mod events;
 pub mod instructions;
 pub mod state;
 pub mod utils;
@@ -57,6 +58,32 @@ pub mod reputex {
         funding_delta_bps: i64,
     ) -> Result<()> {
         update_funding_rate::handler(ctx, market_index, funding_delta_bps)
+    }
+
+    pub fn settle_funding(ctx: Context<SettleFunding>, market_index: u64) -> Result<()> {
+        settle_funding::handler(ctx, market_index)
+    }
+
+    pub fn configure_market_risk(
+        ctx: Context<ConfigureMarketRisk>,
+        market_index: u64,
+        max_open_interest: u64,
+        max_skew_bps: u64,
+        max_funding_rate_bps: u64,
+        funding_interval_slots: u64,
+    ) -> Result<()> {
+        configure_market_risk::handler(
+            ctx,
+            market_index,
+            max_open_interest,
+            max_skew_bps,
+            max_funding_rate_bps,
+            funding_interval_slots,
+        )
+    }
+
+    pub fn set_protocol_paused(ctx: Context<SetProtocolPaused>, trading_paused: bool) -> Result<()> {
+        set_protocol_paused::handler(ctx, trading_paused)
     }
 
     pub fn open_position(

@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::ReputexError;
+use crate::events::MarketPriceUpdated;
 use crate::state::{Market, Protocol};
 
 #[derive(Accounts)]
@@ -30,7 +31,17 @@ pub fn handler(ctx: Context<UpdateMarketPrice>, _market_index: u64, new_price: u
     );
     require!(new_price > 0, ReputexError::InvalidPrice);
 
+    let old_price = ctx.accounts.market.price;
+    let slot = Clock::get()?.slot;
     ctx.accounts.market.price = new_price;
+    ctx.accounts.market.last_price_update_slot = slot;
+
+    emit!(MarketPriceUpdated {
+        market_index: ctx.accounts.market.market_index,
+        old_price,
+        new_price,
+        slot,
+    });
 
     Ok(())
 }
