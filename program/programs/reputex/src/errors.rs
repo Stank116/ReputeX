@@ -17,6 +17,15 @@ pub enum ReputexError {
     #[msg("Insufficient free collateral")]
     InsufficientFreeCollateral,
 
+    #[msg("Invalid collateral mint")]
+    InvalidCollateralMint,
+
+    #[msg("Invalid token account owner")]
+    InvalidTokenAccountOwner,
+
+    #[msg("Invalid collateral vault")]
+    InvalidCollateralVault,
+
     #[msg("Position id does not match the protocol counter")]
     InvalidPositionId,
 

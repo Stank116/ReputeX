@@ -1,12 +1,20 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
+use crate::constants::{BASIS_POINTS, PROTOCOL_SEED};
 use crate::errors::ReputexError;
-use crate::state::{MarginAccount, Market, Position, TraderProfile};
+use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
 use crate::utils::{calculate_pnl, is_liquidatable, reputation_score};
 
 #[derive(Accounts)]
 #[instruction(position_id: u64, market_index: u64)]
 pub struct LiquidatePosition<'info> {
+    #[account(
+        seeds = [PROTOCOL_SEED],
+        bump = protocol.bump
+    )]
+    pub protocol: Account<'info, Protocol>,
+
     #[account(
         mut,
         seeds = [b"market", &market_index.to_le_bytes()],
@@ -39,6 +47,21 @@ pub struct LiquidatePosition<'info> {
     pub trader: UncheckedAccount<'info>,
 
     pub liquidator: Signer<'info>,
+
+    #[account(
+        mut,
+        address = protocol.collateral_vault @ ReputexError::InvalidCollateralVault
+    )]
+    pub collateral_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = liquidator_token_account.mint == protocol.collateral_mint @ ReputexError::InvalidCollateralMint,
+        constraint = liquidator_token_account.owner == liquidator.key() @ ReputexError::InvalidTokenAccountOwner
+    )]
+    pub liquidator_token_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
 }
 
 pub fn handler(
@@ -50,6 +73,7 @@ pub fn handler(
     let profile = &mut ctx.accounts.trader_profile;
     let margin = &mut ctx.accounts.margin_account;
     let position = &mut ctx.accounts.position;
+    let protocol = &ctx.accounts.protocol;
 
     require!(position.is_open, ReputexError::PositionClosed);
 
@@ -78,6 +102,28 @@ pub fn handler(
     margin.collateral_balance = margin
         .collateral_balance
         .saturating_sub(position.collateral_amount);
+
+    let liquidation_reward = position
+        .collateral_amount
+        .checked_mul(market.liquidation_fee_bps)
+        .ok_or(error!(ReputexError::MathOverflow))?
+        .checked_div(BASIS_POINTS)
+        .ok_or(error!(ReputexError::MathOverflow))?;
+
+    if liquidation_reward > 0 {
+        let signer_seeds: &[&[&[u8]]] = &[&[PROTOCOL_SEED, &[protocol.bump]]];
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.collateral_vault.to_account_info(),
+            to: ctx.accounts.liquidator_token_account.to_account_info(),
+            authority: ctx.accounts.protocol.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            cpi_accounts,
+            signer_seeds,
+        );
+        token::transfer(cpi_ctx, liquidation_reward)?;
+    }
 
     // Update open interest
     if position.is_long {

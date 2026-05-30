@@ -9,3 +9,4 @@ pub const MARKET_SEED: &[u8] = b"market";
 pub const TRADER_SEED: &[u8] = b"trader";
 pub const MARGIN_SEED: &[u8] = b"margin";
 pub const POSITION_SEED: &[u8] = b"position";
+pub const VAULT_SEED: &[u8] = b"vault";

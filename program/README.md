@@ -10,7 +10,7 @@ Built with Anchor 0.32.1 on Solana devnet.
 
 Most perps protocols give every wallet the same max leverage regardless of track record. ReputeX flips that — your reputation score goes up when you trade profitably and falls when you get rekt. New wallets start at 100 points and have to earn higher leverage through consistent performance.
 
-The collateral system is intentionally simplified for this version (no SPL token transfers, balances are tracked on-chain). The core mechanics — position math, liquidation logic, and reputation scoring — are production-grade.
+Collateral deposits and withdrawals move SPL tokens into and out of a protocol vault PDA. Trader balances are still tracked on-chain in `MarginAccount`, so the protocol can lock collateral, apply PnL, and enforce free-collateral checks.
 
 ---
 
@@ -34,15 +34,15 @@ One thing worth noting: `position_id` comes from `protocol.next_position_id` whi
 
 **Admin instructions** — only the wallet that called `initialize_protocol` can run these:
 
-- `initialize_protocol` — sets up the Protocol PDA. Call this once after deploying.
+- `initialize_protocol` — sets up the Protocol PDA and SPL collateral vault. Call this once after deploying with the collateral mint you want to accept.
 - `initialize_market(market_index, symbol, initial_price)` — creates a new market. Market index 0 is typically SOL-PERP.
 - `update_market_price(market_index, new_price)` — moves the oracle price. On mainnet you'd replace this with a Pyth feed; on devnet this lets tests drive prices.
 
 **Trader instructions** — any wallet can call these for themselves:
 
 - `create_trader_profile` — initialises your TraderProfile and MarginAccount in one transaction.
-- `deposit_collateral(amount)` — adds to your margin balance.
-- `withdraw_collateral(amount)` — withdraws free (unlocked) collateral.
+- `deposit_collateral(amount)` — transfers SPL collateral from the trader token account into the protocol vault and credits margin.
+- `withdraw_collateral(amount)` — transfers free (unlocked) SPL collateral from the protocol vault back to the trader.
 - `open_position(position_id, market_index, is_long, collateral_amount, leverage)` — locks collateral and opens a long or short. Leverage must be between 1 and the lower of the market's `max_leverage` and the trader's reputation tier.
 - `close_position(position_id, market_index)` — settles your position at current price, applies PnL to your balance, and updates your reputation.
 
@@ -127,7 +127,7 @@ All 6 tests should pass with output like:
 ```
   reputex
     ✓ initializes protocol and market
-    ✓ creates a trader profile and deposits mock collateral
+    ✓ creates a trader profile and deposits SPL collateral
     ✓ opens and closes a profitable long position
     ✓ cannot liquidate a healthy position
     ✓ liquidates an underwater position
@@ -218,7 +218,7 @@ program/
 
 ## Known limitations
 
-- **No real token transfers.** Collateral is tracked as a u64 balance inside `MarginAccount`, not as actual USDC or SOL. Adding SPL transfers would require `anchor_spl` and Associated Token Account handling.
-- **Single admin oracle.** `update_market_price` is gated to the protocol authority. A production version would use Pyth price feeds.
+- **Single admin oracle.** `update_market_price` is gated to the protocol authority. A production version should use Pyth or another battle-tested oracle feed with staleness/confidence checks.
 - **No funding rates.** Long/short open interest is tracked but no funding rate mechanism is implemented yet.
 - **Market max leverage is capped at 5x.** The effective max is lower for traders whose reputation tier has not unlocked the full market cap.
+- **Not audited.** Do not put real user funds at risk until this has independent security review, oracle review, and deployment/runbook hardening.

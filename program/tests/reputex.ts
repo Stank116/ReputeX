@@ -1,8 +1,21 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3.js";
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  SYSVAR_RENT_PUBKEY,
+  Transaction,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import { assert } from "chai";
 import { Reputex } from "../target/types/reputex";
+
+const TOKEN_PROGRAM_ID = new PublicKey(
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+);
+const MINT_SIZE = 82;
+const TOKEN_ACCOUNT_SIZE = 165;
 
 describe("reputex", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
@@ -16,6 +29,63 @@ describe("reputex", () => {
     const buffer = Buffer.alloc(8);
     buffer.writeBigUInt64LE(BigInt(value));
     return buffer;
+  };
+
+  const initializeMintInstruction = (
+    mint: PublicKey,
+    decimals: number,
+    mintAuthority: PublicKey
+  ) =>
+    new TransactionInstruction({
+      programId: TOKEN_PROGRAM_ID,
+      keys: [
+        { pubkey: mint, isSigner: false, isWritable: true },
+        { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+      ],
+      data: Buffer.concat([
+        Buffer.from([0, decimals]),
+        mintAuthority.toBuffer(),
+        Buffer.alloc(36),
+      ]),
+    });
+
+  const initializeTokenAccountInstruction = (
+    account: PublicKey,
+    mint: PublicKey,
+    tokenOwner: PublicKey
+  ) =>
+    new TransactionInstruction({
+      programId: TOKEN_PROGRAM_ID,
+      keys: [
+        { pubkey: account, isSigner: false, isWritable: true },
+        { pubkey: mint, isSigner: false, isWritable: false },
+        { pubkey: tokenOwner, isSigner: false, isWritable: false },
+        { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+      ],
+      data: Buffer.from([1]),
+    });
+
+  const mintToInstruction = (
+    mint: PublicKey,
+    destination: PublicKey,
+    mintAuthority: PublicKey,
+    amount: number
+  ) =>
+    new TransactionInstruction({
+      programId: TOKEN_PROGRAM_ID,
+      keys: [
+        { pubkey: mint, isSigner: false, isWritable: true },
+        { pubkey: destination, isSigner: false, isWritable: true },
+        { pubkey: mintAuthority, isSigner: true, isWritable: false },
+      ],
+      data: Buffer.concat([Buffer.from([7]), u64Le(amount)]),
+    });
+
+  const tokenBalance = async (tokenAccount: PublicKey) => {
+    const balance = await provider.connection.getTokenAccountBalance(
+      tokenAccount
+    );
+    return Number(balance.value.amount);
   };
 
   // ── PDAs ──────────────────────────────────────────────────────────────────
@@ -40,6 +110,54 @@ describe("reputex", () => {
     program.programId
   );
 
+  const [collateralVault] = PublicKey.findProgramAddressSync(
+    [Buffer.from("vault")],
+    program.programId
+  );
+
+  const collateralMint = Keypair.generate();
+  const ownerTokenAccount = Keypair.generate();
+
+  before(async () => {
+    const mintLamports =
+      await provider.connection.getMinimumBalanceForRentExemption(MINT_SIZE);
+    const tokenLamports =
+      await provider.connection.getMinimumBalanceForRentExemption(
+        TOKEN_ACCOUNT_SIZE
+      );
+
+    const tx = new Transaction().add(
+      SystemProgram.createAccount({
+        fromPubkey: owner,
+        newAccountPubkey: collateralMint.publicKey,
+        lamports: mintLamports,
+        space: MINT_SIZE,
+        programId: TOKEN_PROGRAM_ID,
+      }),
+      initializeMintInstruction(collateralMint.publicKey, 6, owner),
+      SystemProgram.createAccount({
+        fromPubkey: owner,
+        newAccountPubkey: ownerTokenAccount.publicKey,
+        lamports: tokenLamports,
+        space: TOKEN_ACCOUNT_SIZE,
+        programId: TOKEN_PROGRAM_ID,
+      }),
+      initializeTokenAccountInstruction(
+        ownerTokenAccount.publicKey,
+        collateralMint.publicKey,
+        owner
+      ),
+      mintToInstruction(
+        collateralMint.publicKey,
+        ownerTokenAccount.publicKey,
+        owner,
+        10_000
+      )
+    );
+
+    await provider.sendAndConfirm(tx, [collateralMint, ownerTokenAccount]);
+  });
+
   // ── Tests ─────────────────────────────────────────────────────────────────
 
   it("initializes protocol and market", async () => {
@@ -47,7 +165,10 @@ describe("reputex", () => {
       .initializeProtocol()
       .accountsStrict({
         protocol,
+        collateralMint: collateralMint.publicKey,
+        collateralVault,
         authority: owner,
+        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc();
@@ -75,7 +196,7 @@ describe("reputex", () => {
     assert.equal(protocolAccount.totalMarkets.toNumber(), 1);
   });
 
-  it("creates a trader profile and deposits mock collateral", async () => {
+  it("creates a trader profile and deposits SPL collateral", async () => {
     await program.methods
       .createTraderProfile()
       .accountsStrict({
@@ -91,14 +212,20 @@ describe("reputex", () => {
     await program.methods
       .depositCollateral(new anchor.BN(DEPOSIT))
       .accountsStrict({
+        protocol,
         marginAccount,
+        collateralVault,
+        ownerTokenAccount: ownerTokenAccount.publicKey,
         owner,
+        tokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc();
 
     const margin = await program.account.marginAccount.fetch(marginAccount);
     assert.equal(margin.collateralBalance.toNumber(), DEPOSIT);
     assert.equal(margin.lockedCollateral.toNumber(), 0);
+    assert.equal(await tokenBalance(collateralVault), DEPOSIT);
+    assert.equal(await tokenBalance(ownerTokenAccount.publicKey), 9_000);
 
     const profile = await program.account.traderProfile.fetch(traderProfile);
     assert.equal(profile.reputationScore.toNumber(), 100); // STARTING_REPUTATION_SCORE
@@ -177,7 +304,14 @@ describe("reputex", () => {
     // Deposit fresh collateral and open a safe position
     await program.methods
       .depositCollateral(new anchor.BN(500))
-      .accountsStrict({ marginAccount, owner })
+      .accountsStrict({
+        protocol,
+        marginAccount,
+        collateralVault,
+        ownerTokenAccount: ownerTokenAccount.publicKey,
+        owner,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
       .rpc();
 
     const positionId = 1;
@@ -213,12 +347,16 @@ describe("reputex", () => {
           new anchor.BN(marketIndex)
         )
         .accountsStrict({
+          protocol,
           market,
           traderProfile,
           marginAccount,
           position,
           trader: owner,
           liquidator: owner,
+          collateralVault,
+          liquidatorTokenAccount: ownerTokenAccount.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
       assert.fail("Expected liquidation to fail on healthy position");
@@ -237,7 +375,14 @@ describe("reputex", () => {
     // Ensure enough free collateral (current price is still 11_000 from prev test)
     await program.methods
       .depositCollateral(new anchor.BN(2_000))
-      .accountsStrict({ marginAccount, owner })
+      .accountsStrict({
+        protocol,
+        marginAccount,
+        collateralVault,
+        ownerTokenAccount: ownerTokenAccount.publicKey,
+        owner,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
       .rpc();
 
     const positionId = 2;
@@ -285,12 +430,16 @@ describe("reputex", () => {
     await program.methods
       .liquidatePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
       .accountsStrict({
+        protocol,
         market,
         traderProfile,
         marginAccount,
         position,
         trader: owner,
         liquidator: owner,
+        collateralVault,
+        liquidatorTokenAccount: ownerTokenAccount.publicKey,
+        tokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc();
 
@@ -318,7 +467,14 @@ describe("reputex", () => {
     const WITHDRAW = Math.min(100, freeCollateral);
     await program.methods
       .withdrawCollateral(new anchor.BN(WITHDRAW))
-      .accountsStrict({ marginAccount, owner })
+      .accountsStrict({
+        protocol,
+        marginAccount,
+        collateralVault,
+        ownerTokenAccount: ownerTokenAccount.publicKey,
+        owner,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
       .rpc();
 
     const marginAfter = await program.account.marginAccount.fetch(
