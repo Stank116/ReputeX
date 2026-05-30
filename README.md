@@ -16,9 +16,8 @@ liquidation paths, and see reputation update with the same scoring model used by
 the Anchor program.
 
 This frontend runs as a local terminal and simulation layer. The Anchor program
-still uses the simplified on-chain collateral ledger described below; production
-settlement with SPL token vault transfers and external oracle feeds is not yet
-implemented.
+now custody-moves SPL collateral through a protocol vault PDA, while oracle,
+funding, and production risk controls still need deployment hardening.
 
 ---
 
@@ -26,7 +25,7 @@ implemented.
 
 Most perps protocols give every wallet the same max leverage regardless of track record. ReputeX flips that — your reputation score goes up when you trade profitably and falls when you get rekt. New wallets start at 100 points and have to earn higher leverage through consistent performance.
 
-The collateral system is intentionally simplified for this version (no SPL token transfers, balances are tracked on-chain). The core mechanics — position math, liquidation logic, and reputation scoring — are production-grade.
+Collateral deposits and withdrawals move SPL tokens into and out of a protocol vault PDA. Trader balances are still tracked on-chain in `MarginAccount`, so the protocol can lock collateral, apply PnL, and enforce free-collateral checks.
 
 ---
 
@@ -50,16 +49,16 @@ One thing worth noting: `position_id` comes from `protocol.next_position_id` whi
 
 **Admin instructions** — only the wallet that called `initialize_protocol` can run these:
 
-- `initialize_protocol` — sets up the Protocol PDA. Call this once after deploying.
+- `initialize_protocol` — sets up the Protocol PDA and SPL collateral vault. Call this once after deploying with the collateral mint you want to accept.
 - `initialize_market(market_index, symbol, initial_price)` — creates a new market. Market index 0 is typically SOL-PERP.
 - `update_market_price(market_index, new_price)` — moves the oracle price. On mainnet you'd replace this with a Pyth feed; on devnet this lets tests drive prices.
 
 **Trader instructions** — any wallet can call these for themselves:
 
 - `create_trader_profile` — initialises your TraderProfile and MarginAccount in one transaction.
-- `deposit_collateral(amount)` — adds to your margin balance.
-- `withdraw_collateral(amount)` — withdraws free (unlocked) collateral.
-- `open_position(position_id, market_index, is_long, collateral_amount, leverage)` — locks collateral and opens a long or short. Leverage must be between 1 and the market's `max_leverage` (currently 5x).
+- `deposit_collateral(amount)` — transfers SPL collateral from the trader token account into the protocol vault and credits margin.
+- `withdraw_collateral(amount)` — transfers free (unlocked) SPL collateral from the protocol vault back to the trader.
+- `open_position(position_id, market_index, is_long, collateral_amount, leverage)` — locks collateral and opens a long or short. Leverage must be between 1 and the lower of the market's `max_leverage` and the trader's reputation tier.
 - `close_position(position_id, market_index)` — settles your position at current price, applies PnL to your balance, and updates your reputation.
 
 **Permissionless:**
@@ -84,7 +83,14 @@ score = 100
 
 The leverage penalty kicks in if your average leverage exceeds 2x. Each liquidation costs 30 points. High win rate and consistent volume push the score up over time.
 
-Future versions could gate leverage tiers to specific score thresholds — the infrastructure is already there in `TraderProfile`.
+Reputation also gates maximum leverage:
+
+| Score | Max leverage |
+|---|---:|
+| 0-79 | 2x |
+| 80-119 | 3x |
+| 120-179 | 4x |
+| 180+ | 5x |
 
 ---
 
@@ -134,7 +140,7 @@ All 6 tests should pass with output like:
 ```
   reputex
     ✓ initializes protocol and market
-    ✓ creates a trader profile and deposits mock collateral
+    ✓ creates a trader profile and deposits SPL collateral
     ✓ opens and closes a profitable long position
     ✓ cannot liquidate a healthy position
     ✓ liquidates an underwater position
@@ -225,7 +231,7 @@ program/
 
 ## Known limitations
 
-- **No real token transfers.** Collateral is tracked as a u64 balance inside `MarginAccount`, not as actual USDC or SOL. Adding SPL transfers would require `anchor_spl` and Associated Token Account handling.
-- **Single admin oracle.** `update_market_price` is gated to the protocol authority. A production version would use Pyth price feeds.
+- **Single admin oracle.** `update_market_price` is gated to the protocol authority. A production version should use Pyth or another battle-tested oracle feed with staleness/confidence checks.
 - **No funding rates.** Long/short open interest is tracked but no funding rate mechanism is implemented yet.
-- **Max leverage is fixed at 5x.** It's a constant in `constants.rs`. Reputation-gated leverage tiers are the obvious next feature.
+- **Market max leverage is capped at 5x.** The effective max is lower for traders whose reputation tier has not unlocked the full market cap.
+- **Not audited.** Do not put real user funds at risk until this has independent security review, oracle review, and deployment/runbook hardening.

@@ -401,7 +401,7 @@ function renderTicket() {
   el("leverageInput").max = maxLeverage;
   el("leverageInput").value = leverage;
   const size = collateral * leverage;
-  el("leverageLabel").textContent = `${leverage}x`;
+  el("leverageLabel").textContent = `${leverage}x max ${maxLeverage}x`;
   el("sizePreview").textContent = fmt(size);
   el("entryPreview").textContent = fmt(market.price);
   el("liqPreview").textContent = fmt(liquidationPrice(collateral, leverage, state.side === "long", market.price));
