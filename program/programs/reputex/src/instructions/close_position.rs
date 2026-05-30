@@ -3,7 +3,9 @@ use anchor_lang::prelude::*;
 use crate::errors::ReputexError;
 use crate::events::PositionClosed;
 use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
-use crate::utils::{calculate_funding_pnl, calculate_pnl, reputation_score};
+use crate::utils::{
+    calculate_funding_pnl, calculate_pnl, reputation_score, require_fresh_market_price,
+};
 
 #[derive(Accounts)]
 #[instruction(position_id: u64, market_index: u64)]
@@ -54,6 +56,7 @@ pub fn handler(ctx: Context<ClosePosition>, _position_id: u64, _market_index: u6
     let position = &mut ctx.accounts.position;
 
     require!(position.is_open, ReputexError::PositionClosed);
+    require_fresh_market_price(market.last_price_update_slot, Clock::get()?.slot)?;
 
     let price_pnl = calculate_pnl(
         position.is_long,
@@ -78,6 +81,7 @@ pub fn handler(ctx: Context<ClosePosition>, _position_id: u64, _market_index: u6
         .ok_or(error!(ReputexError::MathOverflow))?;
 
     // Apply PnL to balance
+    let mut bad_debt = 0;
     if pnl >= 0 {
         require!(
             protocol.insurance_fund_balance >= pnl as u64,
@@ -93,12 +97,21 @@ pub fn handler(ctx: Context<ClosePosition>, _position_id: u64, _market_index: u6
             .ok_or(error!(ReputexError::MathOverflow))?;
         profile.winning_trades = profile.winning_trades.saturating_add(1);
     } else {
-        // Loss: subtract the absolute PnL from balance (collateral is already unlocked but still in balance)
+        // Losses can only credit insurance with collateral that exists in the trader's margin balance.
         let loss = pnl.unsigned_abs();
-        margin.collateral_balance = margin.collateral_balance.saturating_sub(loss);
+        let collectible_loss = loss.min(margin.collateral_balance);
+        bad_debt = loss.saturating_sub(collectible_loss);
+        margin.collateral_balance = margin
+            .collateral_balance
+            .checked_sub(collectible_loss)
+            .ok_or(error!(ReputexError::MathOverflow))?;
         protocol.insurance_fund_balance = protocol
             .insurance_fund_balance
-            .checked_add(loss)
+            .checked_add(collectible_loss)
+            .ok_or(error!(ReputexError::MathOverflow))?;
+        protocol.total_bad_debt = protocol
+            .total_bad_debt
+            .checked_add(bad_debt)
             .ok_or(error!(ReputexError::MathOverflow))?;
         profile.losing_trades = profile.losing_trades.saturating_add(1);
     }
@@ -147,6 +160,7 @@ pub fn handler(ctx: Context<ClosePosition>, _position_id: u64, _market_index: u6
         price_pnl,
         funding_pnl,
         realized_pnl: pnl,
+        bad_debt,
         margin_balance: margin.collateral_balance,
     });
 

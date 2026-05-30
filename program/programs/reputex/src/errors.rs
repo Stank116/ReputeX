@@ -68,6 +68,12 @@ pub enum ReputexError {
     #[msg("Oracle confidence interval is too wide")]
     OracleConfidenceTooWide,
 
+    #[msg("Market price is stale; refresh the oracle before trading")]
+    StaleMarketPrice,
+
+    #[msg("Manual price updates are disabled after oracle pricing is enabled")]
+    ManualPriceUpdateDisabled,
+
     #[msg("Math overflow or underflow")]
     MathOverflow,
 }

@@ -30,6 +30,10 @@ pub fn handler(ctx: Context<UpdateMarketPrice>, _market_index: u64, new_price: u
         ReputexError::Unauthorized
     );
     require!(new_price > 0, ReputexError::InvalidPrice);
+    require!(
+        !ctx.accounts.market.oracle_enabled,
+        ReputexError::ManualPriceUpdateDisabled
+    );
 
     let old_price = ctx.accounts.market.price;
     let slot = Clock::get()?.slot;

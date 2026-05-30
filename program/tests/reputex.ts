@@ -226,6 +226,30 @@ describe("reputex", () => {
     assert.equal(marketAccount.oracleMaxConfidenceBps.toNumber(), 75);
     assert.equal(marketAccount.priceDecimals, 6);
     assert.equal(marketAccount.oracleEnabled, true);
+
+    try {
+      await program.methods
+        .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(10_250))
+        .accountsStrict({ protocol, market, authority: owner })
+        .rpc();
+      assert.fail(
+        "Expected manual price update to fail while oracle is enabled"
+      );
+    } catch (err: any) {
+      assert.include(err.toString(), "ManualPriceUpdateDisabled");
+    }
+
+    await program.methods
+      .configureMarketOracle(
+        new anchor.BN(marketIndex),
+        feedId,
+        new anchor.BN(45),
+        new anchor.BN(75),
+        6,
+        false
+      )
+      .accountsStrict({ protocol, market, authority: owner })
+      .rpc();
   });
 
   it("creates a trader profile and deposits SPL collateral", async () => {
@@ -642,6 +666,91 @@ describe("reputex", () => {
     assert.equal(profile.liquidations.toNumber(), liquidationsBefore + 1);
     assert.equal(profile.totalTrades.toNumber(), tradesBefore + 1);
     assert.equal(liquidatedPosition.isOpen, false);
+  });
+
+  it("records bad debt instead of over-crediting insurance on oversized close losses", async () => {
+    const marginBeforeOpen = await program.account.marginAccount.fetch(
+      marginAccount
+    );
+    const protocolBeforeOpen = await program.account.protocol.fetch(protocol);
+    const freeCollateral =
+      marginBeforeOpen.collateralBalance.toNumber() -
+      marginBeforeOpen.lockedCollateral.toNumber();
+    const collateral = Math.min(3_000, freeCollateral);
+
+    if (collateral < 1_000) {
+      console.log("    (skipping: not enough free collateral available)");
+      return;
+    }
+
+    const positionId = 3;
+    const [position] = PublicKey.findProgramAddressSync(
+      [Buffer.from("position"), owner.toBuffer(), u64Le(positionId)],
+      program.programId
+    );
+
+    await program.methods
+      .openPosition(
+        new anchor.BN(positionId),
+        new anchor.BN(marketIndex),
+        true,
+        new anchor.BN(collateral),
+        2
+      )
+      .accountsStrict({
+        protocol,
+        market,
+        traderProfile,
+        marginAccount,
+        position,
+        owner,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    await program.methods
+      .updateMarketPrice(new anchor.BN(marketIndex), new anchor.BN(1))
+      .accountsStrict({ protocol, market, authority: owner })
+      .rpc();
+
+    const marginAfterOpen = await program.account.marginAccount.fetch(
+      marginAccount
+    );
+    const protocolAfterOpen = await program.account.protocol.fetch(protocol);
+
+    await program.methods
+      .closePosition(new anchor.BN(positionId), new anchor.BN(marketIndex))
+      .accountsStrict({
+        protocol,
+        market,
+        traderProfile,
+        marginAccount,
+        position,
+        owner,
+      })
+      .rpc();
+
+    const marginAfterClose = await program.account.marginAccount.fetch(
+      marginAccount
+    );
+    const protocolAfterClose = await program.account.protocol.fetch(protocol);
+    const expectedCollectibleLoss =
+      marginAfterOpen.collateralBalance.toNumber();
+
+    assert.equal(marginAfterClose.collateralBalance.toNumber(), 0);
+    assert.equal(
+      protocolAfterClose.insuranceFundBalance.toNumber(),
+      protocolAfterOpen.insuranceFundBalance.toNumber() +
+        expectedCollectibleLoss
+    );
+    assert.isAbove(
+      protocolAfterClose.totalBadDebt.toNumber(),
+      protocolBeforeOpen.totalBadDebt.toNumber()
+    );
+    assert.isBelow(
+      protocolAfterClose.insuranceFundBalance.toNumber(),
+      protocolBeforeOpen.insuranceFundBalance.toNumber() + collateral * 2
+    );
   });
 
   it("withdraw collateral reduces balance correctly", async () => {

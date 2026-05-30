@@ -107,6 +107,7 @@ pub struct PositionClosed {
     pub price_pnl: i64,
     pub funding_pnl: i64,
     pub realized_pnl: i64,
+    pub bad_debt: u64,
     pub margin_balance: u64,
 }
 

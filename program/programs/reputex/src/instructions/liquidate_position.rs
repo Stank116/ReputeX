@@ -5,7 +5,10 @@ use crate::constants::{BASIS_POINTS, PROTOCOL_SEED};
 use crate::errors::ReputexError;
 use crate::events::PositionLiquidated;
 use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
-use crate::utils::{calculate_funding_pnl, calculate_pnl, is_liquidatable, reputation_score};
+use crate::utils::{
+    calculate_funding_pnl, calculate_pnl, is_liquidatable, reputation_score,
+    require_fresh_market_price,
+};
 
 #[derive(Accounts)]
 #[instruction(position_id: u64, market_index: u64)]
@@ -78,6 +81,7 @@ pub fn handler(
     let protocol = &mut ctx.accounts.protocol;
 
     require!(position.is_open, ReputexError::PositionClosed);
+    require_fresh_market_price(market.last_price_update_slot, Clock::get()?.slot)?;
 
     let price_pnl = calculate_pnl(
         position.is_long,

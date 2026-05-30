@@ -12,6 +12,7 @@ pub const DEFAULT_FUNDING_INTERVAL_SLOTS: u64 = 1;
 pub const MAX_FUNDING_PERIODS_PER_UPDATE: u64 = 24;
 pub const DEFAULT_ORACLE_MAX_AGE_SECONDS: u64 = 30;
 pub const DEFAULT_ORACLE_MAX_CONFIDENCE_BPS: u64 = 100; // 1%
+pub const MAX_STALE_PRICE_SLOTS: u64 = 150; // Roughly one minute on Solana's target slot time.
 pub const MAX_PRICE_DECIMALS: u8 = 12;
 pub const STARTING_REPUTATION_SCORE: u64 = 100;
 pub const PROTOCOL_SEED: &[u8] = b"protocol";

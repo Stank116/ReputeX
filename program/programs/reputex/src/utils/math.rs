@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::constants::BASIS_POINTS;
+use crate::constants::{BASIS_POINTS, MAX_STALE_PRICE_SLOTS};
 use crate::errors::ReputexError;
 
 /// Returns position size = collateral * leverage
@@ -160,4 +160,10 @@ pub fn normalize_oracle_price(price: i64, exponent: i32, target_decimals: u8) ->
     };
 
     u64::try_from(normalized).map_err(|_| error!(ReputexError::MathOverflow))
+}
+
+pub fn require_fresh_market_price(last_price_update_slot: u64, current_slot: u64) -> Result<()> {
+    let age = current_slot.saturating_sub(last_price_update_slot);
+    require!(age <= MAX_STALE_PRICE_SLOTS, ReputexError::StaleMarketPrice);
+    Ok(())
 }

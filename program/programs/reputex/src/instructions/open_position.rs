@@ -4,7 +4,9 @@ use crate::constants::{BASIS_POINTS, MIN_LEVERAGE};
 use crate::errors::ReputexError;
 use crate::events::PositionOpened;
 use crate::state::{MarginAccount, Market, Position, Protocol, TraderProfile};
-use crate::utils::{calculate_position_size, max_leverage_for_reputation};
+use crate::utils::{
+    calculate_position_size, max_leverage_for_reputation, require_fresh_market_price,
+};
 
 #[derive(Accounts)]
 #[instruction(position_id: u64, market_index: u64)]
@@ -69,6 +71,7 @@ pub fn handler(
         max_leverage_for_reputation(profile.reputation_score, market.max_leverage);
 
     require!(!protocol.trading_paused, ReputexError::ProtocolPaused);
+    require_fresh_market_price(market.last_price_update_slot, Clock::get()?.slot)?;
     require!(
         position_id == protocol.next_position_id,
         ReputexError::InvalidPositionId
