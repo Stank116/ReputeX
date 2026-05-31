@@ -1,10 +1,47 @@
+import { useState } from "react";
+
 import { Preview, Stat } from "../shared/Stat";
 import { clamp, fmt } from "../../lib/format";
+import { liquidationPrice } from "../../lib/perps";
+
+function PositionControls({ position, onAddMargin, onClosePartial, onClose }) {
+  const [marginAmount, setMarginAmount] = useState(100);
+  const [closePercent, setClosePercent] = useState(50);
+
+  return (
+    <div className="position-controls">
+      <input
+        min="1"
+        step="1"
+        type="number"
+        value={marginAmount}
+        aria-label="Margin amount"
+        onChange={(event) => setMarginAmount(event.target.value)}
+      />
+      <button type="button" onClick={() => onAddMargin(position.id, Number(marginAmount))}>
+        Add
+      </button>
+      <select value={closePercent} aria-label="Partial close percentage" onChange={(event) => setClosePercent(Number(event.target.value))}>
+        <option value="25">25%</option>
+        <option value="50">50%</option>
+        <option value="75">75%</option>
+      </select>
+      <button type="button" onClick={() => onClosePartial(position.id, closePercent)}>
+        Reduce
+      </button>
+      <button type="button" onClick={() => onClose(position.id)}>
+        Close
+      </button>
+    </div>
+  );
+}
 
 export function Portfolio({
+  addMarginToPosition,
   balance,
   cashInput,
   closePosition,
+  closePositionPartial,
   depositCollateral,
   locked,
   maintenanceMargin,
@@ -51,11 +88,12 @@ export function Portfolio({
           <span>Side</span>
           <span>Size</span>
           <span>Entry</span>
-          <span>Mark</span>
-          <span>PnL</span>
-          <span>Health</span>
-          <span />
-        </div>
+            <span>Mark</span>
+            <span>PnL</span>
+            <span>Health</span>
+            <span>Liq. gap</span>
+            <span />
+          </div>
         {positions.length === 0 ? (
           <div className="empty-state">
             <Preview label="Open positions" value="None" />
@@ -66,6 +104,9 @@ export function Portfolio({
             const pnl = positionPnl(position);
             const health = clamp((positionEquity(position) / maintenanceMargin(position)) * 100, 0, 999);
             const healthClass = health < 130 ? "down" : health < 220 ? "warn" : "up";
+            const liquidation = liquidationPrice(position.collateral, position.leverage, position.isLong, position.entryPrice);
+            const liquidationGap = Math.abs((market.price - liquidation) / market.price) * 100;
+            const gapClass = liquidationGap < 8 ? "down" : liquidationGap < 18 ? "warn" : "up";
             return (
               <div className="position-row" key={position.id}>
                 <strong>{market.symbol}</strong>
@@ -76,10 +117,17 @@ export function Portfolio({
                 <span>{fmt(position.entryPrice)}</span>
                 <span>{fmt(market.price)}</span>
                 <strong className={pnl >= 0 ? "up" : "down"}>{fmt(pnl)}</strong>
-                <strong className={healthClass}>{health.toFixed(0)}%</strong>
-                <button className="position-action" type="button" onClick={() => closePosition(position.id)}>
-                  Close
-                </button>
+                <div className="health-cell">
+                  <strong className={healthClass}>{health.toFixed(0)}%</strong>
+                  <span style={{ "--health": `${Math.min(health, 100)}%` }} />
+                </div>
+                <strong className={gapClass}>{liquidationGap.toFixed(1)}%</strong>
+                <PositionControls
+                  position={position}
+                  onAddMargin={addMarginToPosition}
+                  onClosePartial={closePositionPartial}
+                  onClose={closePosition}
+                />
               </div>
             );
           })

@@ -38,6 +38,8 @@ export function LiveDevnetConsole() {
   const [form, setForm] = useState(initialForm);
   const [stateOutput, setStateOutput] = useState("Load the program to begin.");
   const [logs, setLogs] = useState([]);
+  const [busyAction, setBusyAction] = useState("");
+  const [tokenBalance, setTokenBalance] = useState("not loaded");
 
   const setField = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const programKey = useMemo(() => {
@@ -51,6 +53,15 @@ export function LiveDevnetConsole() {
   const log = (message) => {
     const stamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     setLogs((entries) => [`${stamp} - ${message}`, ...entries].slice(0, 16));
+  };
+
+  const friendlyError = (error) => {
+    const message = error?.message ?? error?.toString?.() ?? String(error);
+    if (message.includes("User rejected")) return "Wallet rejected the transaction.";
+    if (message.includes("insufficient")) return "Insufficient funds or collateral for this transaction.";
+    if (message.includes("Blockhash")) return "Network blockhash expired. Retry the transaction.";
+    if (message.includes("Account does not exist")) return "Required account is missing. Create profile/token account first.";
+    return message.replace(/^Error:\s*/, "");
   };
 
   const connectWallet = async () => {
@@ -105,6 +116,14 @@ export function LiveDevnetConsole() {
       const ownerAta = associatedTokenAddress(accounts.owner, collateralMint);
       const nextPositionId = Number(output.protocol.nextPositionId.toString());
       output.ownerAssociatedTokenAccount = ownerAta.toBase58();
+      try {
+        const balance = await targetProgram.provider.connection.getTokenAccountBalance(ownerAta);
+        output.ownerTokenBalance = balance.value.uiAmountString ?? balance.value.amount;
+        setTokenBalance(output.ownerTokenBalance);
+      } catch {
+        output.ownerTokenBalance = "token account not found";
+        setTokenBalance("token account not found");
+      }
       if (Number(form.positionId) === 0 && nextPositionId > 0) {
         accounts = derivePdas(targetProgram, targetWallet, { positionId: nextPositionId });
       }
@@ -135,22 +154,38 @@ export function LiveDevnetConsole() {
 
   const send = async (label, builder) => {
     if (!program || !provider) throw new Error("Load the program first");
-    const transactionBuilder = await builder();
-    const signature = await transactionBuilder.rpc();
-    log(`${label}: ${signature}`);
-    await refreshState();
+    setBusyAction(label);
+    log(`${label}: pending wallet approval`);
+    try {
+      const transactionBuilder = await builder();
+      const signature = await transactionBuilder.rpc();
+      log(`${label}: confirmed ${signature}`);
+      await refreshState();
+    } catch (error) {
+      log(`${label}: ${friendlyError(error)}`);
+    } finally {
+      setBusyAction("");
+    }
   };
 
   const sendTransaction = async (label, builder) => {
     if (!program || !provider) throw new Error("Load the program first");
-    const transaction = await builder();
-    if (transaction.instructions.length === 0) {
+    setBusyAction(label);
+    log(`${label}: preparing transaction`);
+    try {
+      const transaction = await builder();
+      if (transaction.instructions.length === 0) {
+        await refreshState();
+        return;
+      }
+      const signature = await provider.sendAndConfirm(transaction);
+      log(`${label}: confirmed ${signature}`);
       await refreshState();
-      return;
+    } catch (error) {
+      log(`${label}: ${friendlyError(error)}`);
+    } finally {
+      setBusyAction("");
     }
-    const signature = await provider.sendAndConfirm(transaction);
-    log(`${label}: ${signature}`);
-    await refreshState();
   };
 
   const createOwnerTokenAccount = async () =>
@@ -198,7 +233,7 @@ export function LiveDevnetConsole() {
         <div className="devnet-summary">
           <Stat label="Wallet" value={shortKey(wallet?.publicKey)} />
           <Stat label="Program" value={programKey ? shortKey(programKey) : "Invalid"} tone={programKey ? "up" : "down"} />
-          <Stat label="Cluster" value="Devnet" />
+          <Stat label="Token balance" value={tokenBalance} />
         </div>
 
         <div className="live-form">
@@ -230,7 +265,9 @@ export function LiveDevnetConsole() {
           </label>
         </div>
 
-        <div className="live-actions">
+        {busyAction ? <div className="pending-banner">Pending: {busyAction}</div> : null}
+
+        <div className={`live-actions ${busyAction ? "busy" : ""}`} aria-busy={Boolean(busyAction)}>
           <button className="primary-action" type="button" onClick={() => run(connectWallet)}>
             Connect Phantom
           </button>

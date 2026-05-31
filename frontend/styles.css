@@ -311,10 +311,41 @@ label {
   color: var(--text);
 }
 
+.chart-shell {
+  position: relative;
+}
+
 .price-chart {
   display: block;
   width: 100%;
   height: 390px;
+}
+
+.chart-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--line-soft);
+  background: #080c10;
+}
+
+.chart-controls button,
+.order-type-tabs button,
+.pending-orders button,
+.position-controls button {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  background: #0a1015;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.chart-controls button:hover,
+.order-type-tabs button:hover,
+.pending-orders button:hover,
+.position-controls button:hover {
+  border-color: var(--cyan);
 }
 
 .trade-tape {
@@ -394,6 +425,26 @@ label {
   padding: 12px;
 }
 
+.order-type-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.order-type-tabs button {
+  border: 0;
+  background: #090d11;
+  color: var(--muted);
+}
+
+.order-type-tabs button.active {
+  background: var(--surface-3);
+  color: var(--cyan);
+}
+
 .side-toggle {
   height: 42px;
   margin-bottom: 16px;
@@ -467,6 +518,41 @@ input[type="range"] {
   line-height: 1.35;
 }
 
+.risk-meter {
+  height: 8px;
+  margin: -6px 0 14px;
+  background: #080c10;
+}
+
+.risk-meter span {
+  display: block;
+  width: var(--risk);
+  height: 100%;
+  background: linear-gradient(90deg, var(--red), var(--amber), var(--green));
+}
+
+.pending-orders {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  background: #080c10;
+}
+
+.pending-orders > strong {
+  color: var(--text);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.pending-orders div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .cash-controls {
   gap: 8px;
 }
@@ -507,9 +593,10 @@ input[type="range"] {
 .table-header,
 .position-row {
   display: grid;
-  grid-template-columns: 1.2fr 0.7fr 1fr 1fr 1fr 1fr 1fr 118px;
-  min-width: 860px;
+  grid-template-columns: 1.1fr 0.72fr 0.8fr 0.82fr 0.82fr 0.82fr 1fr 0.75fr 250px;
+  min-width: 1080px;
   align-items: center;
+  gap: 10px;
 }
 
 .table-header {
@@ -532,6 +619,74 @@ input[type="range"] {
   place-items: center;
   min-height: 150px;
   color: var(--muted);
+}
+
+.health-cell {
+  display: grid;
+  gap: 5px;
+}
+
+.health-cell span {
+  width: 100%;
+  height: 6px;
+  background: #080c10;
+}
+
+.health-cell span::before {
+  content: "";
+  display: block;
+  width: var(--health);
+  height: 100%;
+  background: linear-gradient(90deg, var(--red), var(--amber), var(--green));
+}
+
+.position-controls {
+  display: grid;
+  grid-template-columns: 58px 44px 64px 62px 62px;
+  gap: 5px;
+}
+
+.position-controls input,
+.position-controls select {
+  min-height: 30px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.position-controls button {
+  min-height: 30px;
+  font-size: 12px;
+}
+
+.toast-stack {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  width: min(320px, calc(100vw - 32px));
+}
+
+.toast {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: rgba(13, 17, 22, 0.98);
+  color: var(--text);
+  font-weight: 800;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.toast.success {
+  border-color: rgba(42, 218, 158, 0.55);
+}
+
+.toast.warn {
+  border-color: rgba(244, 196, 86, 0.55);
+}
+
+.toast.danger {
+  border-color: rgba(255, 91, 110, 0.55);
 }
 
 .profile-panel .panel-heading strong {
@@ -618,6 +773,22 @@ input[type="range"] {
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-top: 14px;
+}
+
+.live-actions.busy button {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.pending-banner {
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  margin-top: 12px;
+  border: 1px solid rgba(244, 196, 86, 0.4);
+  background: rgba(244, 196, 86, 0.08);
+  color: var(--amber);
+  font-weight: 900;
 }
 
 .live-actions .primary-action {
@@ -799,6 +970,12 @@ input[type="range"] {
 
   .price-chart {
     height: 310px;
+  }
+
+  .chart-controls,
+  .order-type-tabs,
+  .position-controls {
+    grid-template-columns: 1fr 1fr;
   }
 
   .trade-tape {

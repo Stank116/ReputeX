@@ -37,6 +37,11 @@ export function TradingTerminal() {
   const [collateralInput, setCollateralInput] = useState(500);
   const [cashInput, setCashInput] = useState(2500);
   const [leverageInput, setLeverageInput] = useState(2);
+  const [orderType, setOrderType] = useState("market");
+  const [limitPriceInput, setLimitPriceInput] = useState("");
+  const [triggerPriceInput, setTriggerPriceInput] = useState("");
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [ticketMessage, setTicketMessage] = useState("");
   const [timeframe, setTimeframe] = useState("1m");
 
@@ -60,13 +65,24 @@ export function TradingTerminal() {
     setActivity((entries) => [`${stamp} - ${message}`, ...entries].slice(0, 8));
   };
 
-  const closePosition = (id, liquidated = false, marketList = markets) => {
+  const notify = (message, tone = "info") => {
+    const id = `${Date.now()}-${Math.random()}`;
+    setNotifications((items) => [{ id, message, tone }, ...items].slice(0, 4));
+    window.setTimeout(() => {
+      setNotifications((items) => items.filter((item) => item.id !== id));
+    }, 4200);
+  };
+
+  const closePosition = (id, liquidated = false, marketList = markets, closeRatio = 1) => {
     setPositions((current) => {
       const position = current.find((item) => item.id === id);
       if (!position) return current;
-      const pnl = positionPnl(position, marketList);
-      setLocked((value) => Math.max(value - position.collateral, 0));
-      setBalance((value) => (liquidated ? Math.max(value - position.collateral, 0) : Math.max(value + pnl, 0)));
+      const ratio = clamp(closeRatio, 0.01, 1);
+      const pnl = positionPnl(position, marketList) * ratio;
+      const collateralClosed = position.collateral * ratio;
+      const sizeClosed = position.size * ratio;
+      setLocked((value) => Math.max(value - collateralClosed, 0));
+      setBalance((value) => (liquidated ? Math.max(value - collateralClosed, 0) : Math.max(value + pnl, 0)));
       setProfile((oldProfile) => {
         const totalTrades = oldProfile.totalTrades + 1;
         const newLeverage = position.leverage * 100;
@@ -80,19 +96,57 @@ export function TradingTerminal() {
           winningTrades: pnl > 0 && !liquidated ? oldProfile.winningTrades + 1 : oldProfile.winningTrades,
           losingTrades: pnl <= 0 || liquidated ? oldProfile.losingTrades + 1 : oldProfile.losingTrades,
           liquidations: liquidated ? oldProfile.liquidations + 1 : oldProfile.liquidations,
-          totalVolume: oldProfile.totalVolume + position.size,
+          totalVolume: oldProfile.totalVolume + sizeClosed,
           realizedPnl: oldProfile.realizedPnl + pnl,
           avgLeverageX100,
         };
         return { ...updated, reputationScore: calculateReputation(updated) };
       });
       log(
-        `${liquidated ? "Liquidated" : "Closed"} ${marketList[position.marketIndex].symbol} ${
+        `${liquidated ? "Liquidated" : ratio < 1 ? "Reduced" : "Closed"} ${marketList[position.marketIndex].symbol} ${
           pnl >= 0 ? "+" : ""
         }${fmt(pnl)}`
       );
-      return current.filter((item) => item.id !== id);
+      notify(`${liquidated ? "Liquidated" : ratio < 1 ? "Position reduced" : "Position closed"} ${marketList[position.marketIndex].symbol}`, liquidated ? "danger" : pnl >= 0 ? "success" : "warn");
+      if (ratio >= 0.999 || liquidated) return current.filter((item) => item.id !== id);
+      return current.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              collateral: item.collateral - collateralClosed,
+              size: item.size - sizeClosed,
+            }
+          : item
+      );
     });
+  };
+
+  const closePositionPartial = (id, percent) => closePosition(id, false, markets, Number(percent) / 100);
+
+  const addMarginToPosition = (id, amount) => {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setTicketMessage("Margin amount must be above zero.");
+      return;
+    }
+    if (freeCollateral < amount) {
+      setTicketMessage("Insufficient free collateral to add margin.");
+      notify("Insufficient free collateral", "warn");
+      return;
+    }
+    setPositions((items) =>
+      items.map((position) =>
+        position.id === id
+          ? {
+              ...position,
+              collateral: position.collateral + amount,
+              leverage: Math.max(1, Number((position.size / (position.collateral + amount)).toFixed(2))),
+            }
+          : position
+      )
+    );
+    setLocked((value) => value + amount);
+    log(`Added ${fmt(amount)} margin to position #${id}`);
+    notify(`Added margin to position #${id}`, "success");
   };
 
   useEffect(() => {
@@ -111,6 +165,32 @@ export function TradingTerminal() {
             return updated.length > 90 ? updated.slice(1) : updated;
           })
         );
+        pendingOrders.forEach((order) => {
+          const mark = nextMarkets[order.marketIndex].price;
+          const triggered =
+            order.type === "limit"
+              ? order.isLong
+                ? mark <= order.price
+                : mark >= order.price
+              : order.isLong
+                ? mark >= order.price
+                : mark <= order.price;
+          if (triggered) {
+            executeOpenPosition(order, nextMarkets, true);
+          }
+        });
+        setPendingOrders((orders) =>
+          orders.filter((order) => {
+            const mark = nextMarkets[order.marketIndex].price;
+            return order.type === "limit"
+              ? order.isLong
+                ? mark > order.price
+                : mark < order.price
+              : order.isLong
+                ? mark < order.price
+                : mark > order.price;
+          })
+        );
         positions
           .filter((position) => positionEquity(position, nextMarkets) <= maintenanceMargin(position))
           .forEach((position) => closePosition(position.id, true, nextMarkets));
@@ -118,10 +198,29 @@ export function TradingTerminal() {
       });
     }, 1800);
     return () => clearInterval(timer);
-  }, [positions]);
+  }, [pendingOrders, positions]);
 
   const openInterestFor = (index) =>
     positions.filter((position) => position.marketIndex === index).reduce((sum, position) => sum + position.size, 0);
+
+  const executeOpenPosition = (order, marketList = markets, fromTrigger = false) => {
+    const selectedMarket = marketList[order.marketIndex];
+    const position = {
+      id: order.positionId,
+      marketIndex: order.marketIndex,
+      isLong: order.isLong,
+      collateral: order.collateral,
+      leverage: order.leverage,
+      entryPrice: selectedMarket.price,
+      size: order.collateral * order.leverage,
+    };
+    setPositions((items) => [...items, position]);
+    if (!fromTrigger) setNextPositionId((value) => value + 1);
+    setLocked((value) => value + order.collateral);
+    setTicketMessage(fromTrigger ? "Conditional order filled." : "Position opened.");
+    log(`Opened ${position.isLong ? "long" : "short"} ${selectedMarket.symbol} ${fmt(position.size, 0)} at ${fmt(position.entryPrice)}`);
+    notify(`${fromTrigger ? "Conditional filled" : "Position opened"} ${selectedMarket.symbol}`, "success");
+  };
 
   const openPosition = () => {
     if (!connected) {
@@ -142,20 +241,32 @@ export function TradingTerminal() {
       return;
     }
 
-    const position = {
-      id: nextPositionId,
+    const order = {
+      id: `${Date.now()}-${nextPositionId}`,
+      positionId: nextPositionId,
+      type: orderType,
       marketIndex: activeMarket,
       isLong: side === "long",
       collateral,
       leverage,
-      entryPrice: active.price,
-      size: collateral * leverage,
+      price: orderType === "limit" ? Number(limitPriceInput) : Number(triggerPriceInput),
     };
-    setPositions((items) => [...items, position]);
+
+    if (orderType === "market") {
+      executeOpenPosition(order);
+      return;
+    }
+
+    if (!Number.isFinite(order.price) || order.price <= 0) {
+      setTicketMessage("Conditional orders need a valid price.");
+      return;
+    }
+
+    setPendingOrders((orders) => [order, ...orders].slice(0, 8));
     setNextPositionId((value) => value + 1);
-    setLocked((value) => value + collateral);
-    setTicketMessage("Position opened.");
-    log(`Opened ${position.isLong ? "long" : "short"} ${active.symbol} ${fmt(position.size, 0)} at ${fmt(position.entryPrice)}`);
+    setTicketMessage(`${orderType === "limit" ? "Limit" : "Stop"} order placed.`);
+    log(`Placed ${orderType} ${side} ${active.symbol} trigger ${fmt(order.price)}`);
+    notify(`${orderType === "limit" ? "Limit" : "Stop"} order placed`, "info");
   };
 
   const depositCollateral = () => {
@@ -170,6 +281,7 @@ export function TradingTerminal() {
     }
     setBalance((value) => value + amount);
     log(`Deposited ${fmt(amount)}`);
+    notify(`Deposited ${fmt(amount)}`, "success");
   };
 
   const withdrawCollateral = () => {
@@ -188,15 +300,26 @@ export function TradingTerminal() {
     }
     setBalance((value) => value - amount);
     log(`Withdrew ${fmt(amount)}`);
+    notify(`Withdrew ${fmt(amount)}`, "success");
   };
 
   const collateral = Math.max(Number(collateralInput) || 0, 0);
   const size = collateral * leverage;
   const liquidation = liquidationPrice(collateral, leverage, side === "long", active.price);
   const marginUsage = accountEquity > 0 ? clamp((locked / accountEquity) * 100, 0, 100) : 0;
+  const liquidationDistance = active.price > 0 ? Math.abs((active.price - liquidation) / active.price) * 100 : 0;
+  const estimatedFee = size * 0.0005;
+  const activePendingOrders = pendingOrders.filter((order) => order.marketIndex === activeMarket);
 
   return (
     <>
+      <div className="toast-stack" aria-live="polite">
+        {notifications.map((item) => (
+          <div className={`toast ${item.tone}`} key={item.id}>
+            {item.message}
+          </div>
+        ))}
+      </div>
       <section className="account-strip terminal-account" aria-label="Account state">
         <Stat label="Session" value={connected ? "Demo wallet" : "Disconnected"} />
         <Stat label="Equity" value={fmt(accountEquity)} />
@@ -279,6 +402,17 @@ export function TradingTerminal() {
         <OrderBook market={active} />
 
         <aside className="ticket-panel" aria-label="Order ticket">
+          <div className="order-type-tabs" role="group" aria-label="Order type">
+            {[
+              ["market", "Market"],
+              ["limit", "Limit"],
+              ["stop", "Stop"],
+            ].map(([value, label]) => (
+              <button className={orderType === value ? "active" : ""} key={value} type="button" onClick={() => setOrderType(value)}>
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="side-toggle" role="group" aria-label="Trade side">
             <button className={`long ${side === "long" ? "active" : ""}`} type="button" onClick={() => setSide("long")}>
               Long
@@ -298,23 +432,71 @@ export function TradingTerminal() {
               {leverage}x max {maxLeverage}x
             </span>
           </label>
+          {orderType === "limit" ? (
+            <label>
+              Limit price
+              <input
+                min="0.01"
+                step="0.01"
+                type="number"
+                placeholder={active.price.toFixed(2)}
+                value={limitPriceInput}
+                onChange={(event) => setLimitPriceInput(event.target.value)}
+              />
+            </label>
+          ) : null}
+          {orderType === "stop" ? (
+            <label>
+              Stop trigger
+              <input
+                min="0.01"
+                step="0.01"
+                type="number"
+                placeholder={side === "long" ? (active.price * 1.01).toFixed(2) : (active.price * 0.99).toFixed(2)}
+                value={triggerPriceInput}
+                onChange={(event) => setTriggerPriceInput(event.target.value)}
+              />
+            </label>
+          ) : null}
           <div className="ticket-preview">
             <Preview label="Size" value={fmt(size)} />
             <Preview label="Entry" value={fmt(active.price)} />
             <Preview label="Liq. price" value={fmt(liquidation)} />
+            <Preview label="Liq. gap" value={`${liquidationDistance.toFixed(1)}%`} tone={liquidationDistance < 8 ? "down" : liquidationDistance < 18 ? "warn" : "up"} />
             <Preview label="Maintenance" value={fmt((size * MAINTENANCE_MARGIN_BPS) / BASIS_POINTS)} />
+            <Preview label="Est. fee" value={fmt(estimatedFee)} />
+          </div>
+          <div className="risk-meter" aria-label="Liquidation risk meter">
+            <span style={{ "--risk": `${clamp(liquidationDistance * 4, 3, 100)}%` }} />
           </div>
           <button className="submit-order" type="button" onClick={openPosition}>
-            Open {side === "long" ? "Long" : "Short"}
+            {orderType === "market" ? "Open" : "Place"} {side === "long" ? "Long" : "Short"}
           </button>
           <p className="ticket-message" role="status">
             {ticketMessage}
           </p>
+          {activePendingOrders.length ? (
+            <div className="pending-orders">
+              <strong>Pending orders</strong>
+              {activePendingOrders.map((order) => (
+                <div key={order.id}>
+                  <span>
+                    {order.type} {order.isLong ? "long" : "short"}
+                  </span>
+                  <button type="button" onClick={() => setPendingOrders((orders) => orders.filter((item) => item.id !== order.id))}>
+                    Cancel {fmt(order.price)}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </aside>
 
         <Portfolio
+          addMarginToPosition={addMarginToPosition}
           balance={balance}
           closePosition={closePosition}
+          closePositionPartial={closePositionPartial}
           locked={locked}
           markets={markets}
           positions={positions}
