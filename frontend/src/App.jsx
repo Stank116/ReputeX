@@ -1,9 +1,7 @@
 import { useState } from "react";
 
-import { PROGRAM_ID } from "./config/markets";
 import { LiveDevnetConsole } from "./components/live/LiveDevnetConsole";
 import { TradingTerminal } from "./components/trading/TradingTerminal";
-import { shortKey } from "./lib/format";
 
 function App() {
   const [view, setView] = useState("home");
@@ -12,10 +10,12 @@ function App() {
     <main className="terminal-shell">
       <header className="topbar">
         <section className="brand-block" aria-label="Protocol summary">
-          <div className="brand-mark">RX</div>
+          <div className="brand-mark" aria-hidden="true">
+            <span className="brand-triangle" />
+          </div>
           <div>
-            <h1>ReputeX</h1>
-            <p>On-chain reputation perps</p>
+            <h1>Zenith</h1>
+            <p>ON-CHAIN PERPETUALS</p>
           </div>
         </section>
 
@@ -29,14 +29,16 @@ function App() {
           <button className={view === "portfolio" ? "active" : ""} type="button" onClick={() => setView("portfolio")}>
             Portfolio
           </button>
-          <button className={view === "live" ? "active" : ""} type="button" onClick={() => setView("live")}>
-            Live Devnet
-          </button>
         </nav>
 
-        <section className="program-badge" aria-label="Deployment">
-          <span>Devnet program</span>
-          <strong>{shortKey(PROGRAM_ID)}</strong>
+        <section className="topbar-actions" aria-label="Network and wallet">
+          <div className="network-status">
+            <span className="status-dot" aria-hidden="true" />
+            <strong>SOLANA · DEVNET</strong>
+          </div>
+          <button className="wallet-pill" type="button" onClick={() => setView("trade")}>
+            Connect Wallet
+          </button>
         </section>
       </header>
 

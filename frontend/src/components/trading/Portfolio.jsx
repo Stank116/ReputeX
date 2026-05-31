@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Preview, Stat } from "../shared/Stat";
+import { Preview } from "../shared/Stat";
 import { clamp, fmt } from "../../lib/format";
 import { liquidationPrice } from "../../lib/perps";
 
@@ -59,7 +59,6 @@ export function Portfolio({
   withdrawCollateral,
 }) {
   const [activeTab, setActiveTab] = useState("positions");
-  const winRate = profile.totalTrades ? (profile.winningTrades / profile.totalTrades) * 100 : 0;
 
   return (
     <section className="portfolio-panel" aria-label="Portfolio">
@@ -86,17 +85,11 @@ export function Portfolio({
           </div>
         )}
       </div>
-      <div className="risk-strip">
-        <Stat label="Balance" value={fmt(balance)} />
-        <Stat label="Locked" value={fmt(locked)} />
-        <Stat label="Realized PnL" value={fmt(profile.realizedPnl)} tone={profile.realizedPnl >= 0 ? "up" : "down"} />
-        <Stat label="Win rate" value={`${winRate.toFixed(1)}%`} />
-      </div>
       <div className="table-tabs" role="group" aria-label="Portfolio table">
         {[
-          ["positions", `Positions (${positions.length})`],
-          ["orders", `Open Orders (${pendingOrders.length})`],
-          ["history", `Trade History (${activity.filter((item) => item !== "Session ready").length})`],
+          ["positions", `Positions ${positions.length}`],
+          ["orders", `Open Orders ${pendingOrders.length}`],
+          ["history", `Trade History ${activity.filter((item) => item !== "Session ready").length}`],
         ].map(([value, label]) => (
           <button className={activeTab === value ? "active" : ""} key={value} type="button" onClick={() => setActiveTab(value)}>
             {label}

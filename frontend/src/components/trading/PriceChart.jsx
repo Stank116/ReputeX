@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { fmt } from "../../lib/format";
 
 export function PriceChart({ points, positive }) {
   const canvasRef = useRef(null);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState(0);
+  const zoom = 1;
+  const pan = 0;
 
   const candles = useMemo(() => {
     const groupSize = Math.max(2, Math.round(4 / zoom));
@@ -90,6 +90,7 @@ export function PriceChart({ points, positive }) {
     const xFor = (index) => pad + (index / Math.max(candles.length - 1, 1)) * (width - pad * 2);
     const slot = (width - pad * 2) / Math.max(candles.length, 1);
     const bodyWidth = Math.max(5, Math.min(18, slot * 0.58));
+    const lastClose = candles.at(-1)?.close;
 
     candles.forEach((candle, index) => {
       const x = xFor(index);
@@ -126,6 +127,19 @@ export function PriceChart({ points, positive }) {
     context.lineWidth = 1.7;
     context.stroke();
 
+    if (Number.isFinite(lastClose)) {
+      const currentY = scaleY(lastClose);
+      context.save();
+      context.setLineDash([4, 4]);
+      context.strokeStyle = "#ff5b6e";
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(pad, currentY);
+      context.lineTo(width - pad, currentY);
+      context.stroke();
+      context.restore();
+    }
+
     context.fillStyle = "#8c9aa7";
     context.font = "12px Inter, system-ui";
     context.fillText(fmt(max), width - 96, 20);
@@ -140,20 +154,6 @@ export function PriceChart({ points, positive }) {
   return (
     <div className="chart-shell">
       <canvas className="price-chart" ref={canvasRef} width="920" height="420" />
-      <div className="chart-controls" aria-label="Chart controls">
-        <button type="button" onClick={() => setPan((value) => Math.max(value - 4, 0))}>
-          Pan left
-        </button>
-        <button type="button" onClick={() => setZoom((value) => Math.max(value - 0.5, 1))}>
-          Zoom out
-        </button>
-        <button type="button" onClick={() => setZoom((value) => Math.min(value + 0.5, 3))}>
-          Zoom in
-        </button>
-        <button type="button" onClick={() => setPan((value) => value + 4)}>
-          Pan right
-        </button>
-      </div>
     </div>
   );
 }
