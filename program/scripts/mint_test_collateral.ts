@@ -100,10 +100,11 @@ const defaultSolanaWalletPath = () =>
 
 const ensureWalletEnv = () => {
   if (process.env.ANCHOR_WALLET || process.env.WALLET) return;
-  if (fs.existsSync(defaultSolanaWalletPath())) return;
   if (fs.existsSync(DEFAULT_AUTHORITY_PATH)) {
     process.env.ANCHOR_WALLET = DEFAULT_AUTHORITY_PATH;
+    return;
   }
+  if (fs.existsSync(defaultSolanaWalletPath())) return;
 };
 
 async function main() {
@@ -116,6 +117,10 @@ async function main() {
   const amount = BigInt(Math.trunc(uiAmount * 10 ** decimals));
   const recipientAta = associatedTokenAddress(recipientOwner, mint);
   const tx = new Transaction();
+
+  console.log(`Mint authority: ${provider.wallet.publicKey.toBase58()}`);
+  console.log(`Collateral mint: ${mint.toBase58()}`);
+  console.log(`Recipient ATA: ${recipientAta.toBase58()}`);
 
   if (!(await provider.connection.getAccountInfo(recipientAta))) {
     tx.add(

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { DEFAULT_IDL_PATH, DEFAULT_RPC_URL, DEFAULT_SOL_PYTH_PRICE_UPDATE, PROGRAM_ID } from "../../config/markets";
 import { safeJson, shortKey } from "../../lib/format";
@@ -33,6 +33,7 @@ const initialForm = {
 
 export function LiveDevnetConsole() {
   const [wallet, setWallet] = useState(null);
+  const [walletStatus, setWalletStatus] = useState("Checking wallet...");
   const [program, setProgram] = useState(null);
   const [provider, setProvider] = useState(null);
   const [form, setForm] = useState(initialForm);
@@ -55,9 +56,28 @@ export function LiveDevnetConsole() {
     setLogs((entries) => [`${stamp} - ${message}`, ...entries].slice(0, 16));
   };
 
+  const phantomInstallUrl = "https://phantom.app/download";
+
+  const getPhantomProvider = () => {
+    if (window.phantom?.solana?.isPhantom) return window.phantom.solana;
+    if (window.solana?.isPhantom) return window.solana;
+    if (Array.isArray(window.solana?.providers)) {
+      return window.solana.providers.find((provider) => provider.isPhantom) ?? null;
+    }
+    return null;
+  };
+
+  const waitForPhantomProvider = async () => {
+    const existing = getPhantomProvider();
+    if (existing) return existing;
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    return getPhantomProvider();
+  };
+
   const friendlyError = (error) => {
     const message = error?.message ?? error?.toString?.() ?? String(error);
     if (message.includes("User rejected")) return "Wallet rejected the transaction.";
+    if (message.includes("Unexpected error")) return "Wallet connection failed. Unlock Phantom, set it to Devnet, and retry.";
     if (message.includes("insufficient")) return "Insufficient funds or collateral for this transaction.";
     if (message.includes("Blockhash")) return "Network blockhash expired. Retry the transaction.";
     if (message.includes("ManualPriceUpdateDisabled")) return "Manual price updates are disabled while oracle pricing is enabled.";
@@ -92,12 +112,79 @@ export function LiveDevnetConsole() {
     return new PublicKey(form.ownerTokenAccount);
   };
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const detectWallet = async () => {
+      const provider = await waitForPhantomProvider();
+      if (cancelled) return;
+      if (!provider) {
+        setWalletStatus("Phantom not detected in this browser");
+        return;
+      }
+      setWalletStatus(provider.isConnected ? `Connected ${shortKey(provider.publicKey)}` : "Phantom detected");
+      if (provider.isConnected && provider.publicKey) setWallet(provider);
+
+      provider.on?.("connect", (publicKey) => {
+        setWallet(provider);
+        setWalletStatus(`Connected ${shortKey(publicKey)}`);
+        log(`Wallet connected ${publicKey.toBase58()}`);
+      });
+      provider.on?.("disconnect", () => {
+        setWallet(null);
+        setProgram(null);
+        setProvider(null);
+        setWalletStatus("Wallet disconnected");
+        log("Wallet disconnected");
+      });
+      provider.on?.("accountChanged", (publicKey) => {
+        if (!publicKey) {
+          setWallet(null);
+          setWalletStatus("Wallet locked or disconnected");
+          log("Wallet locked or disconnected");
+          return;
+        }
+        setWallet(provider);
+        setWalletStatus(`Connected ${shortKey(publicKey)}`);
+        log(`Wallet changed ${publicKey.toBase58()}`);
+      });
+    };
+
+    detectWallet();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const connectWallet = async () => {
-    if (!window.solana?.isPhantom) throw new Error("Phantom wallet not found");
-    const response = await window.solana.connect();
-    setWallet(window.solana);
-    log(`Wallet connected ${response.publicKey.toBase58()}`);
-    return window.solana;
+    const phantom = await waitForPhantomProvider();
+    if (!phantom) {
+      setWalletStatus("Open this app in Chrome/Brave with Phantom installed");
+      throw new Error("Phantom wallet not found in this browser.");
+    }
+    try {
+      setBusyAction("connect wallet");
+      setWalletStatus("Waiting for Phantom approval...");
+      const response = await phantom.connect({ onlyIfTrusted: false });
+      setWallet(phantom);
+      setWalletStatus(`Connected ${shortKey(response.publicKey)}`);
+      log(`Wallet connected ${response.publicKey.toBase58()}`);
+      return phantom;
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const disconnectWallet = async () => {
+    const phantom = wallet ?? getPhantomProvider();
+    if (phantom?.disconnect) await phantom.disconnect();
+    setWallet(null);
+    setProgram(null);
+    setProvider(null);
+    setTokenBalance("not loaded");
+    setWalletStatus("Wallet disconnected");
+    log("Wallet disconnected");
   };
 
   const loadProgram = async () => {
@@ -265,6 +352,14 @@ export function LiveDevnetConsole() {
           <Stat label="Program" value={programKey ? shortKey(programKey) : "Invalid"} tone={programKey ? "up" : "down"} />
           <Stat label="Token balance" value={tokenBalance} />
         </div>
+        <div className={wallet ? "wallet-status live" : "wallet-status"}>
+          <span>{walletStatus}</span>
+          {!wallet && walletStatus.includes("not detected") ? (
+            <a href={phantomInstallUrl} rel="noreferrer" target="_blank">
+              Install Phantom
+            </a>
+          ) : null}
+        </div>
 
         <div className="live-form">
           <LiveInput label="RPC URL" value={form.rpcUrl} onChange={(value) => setField("rpcUrl", value)} />
@@ -298,8 +393,8 @@ export function LiveDevnetConsole() {
         {busyAction ? <div className="pending-banner">Pending: {busyAction}</div> : null}
 
         <div className={`live-actions ${busyAction ? "busy" : ""}`} aria-busy={Boolean(busyAction)}>
-          <button className="primary-action" type="button" onClick={() => run(connectWallet)}>
-            Connect Phantom
+          <button className="primary-action" type="button" onClick={() => run(wallet ? disconnectWallet : connectWallet)}>
+            {wallet ? "Disconnect" : "Connect Phantom"}
           </button>
           <button className="primary-action" type="button" onClick={() => run(loadProgram)}>
             Load Program
