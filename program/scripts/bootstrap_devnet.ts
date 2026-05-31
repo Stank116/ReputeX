@@ -36,7 +36,8 @@ const optionalEnv = (name: string) => {
 
 const expandPath = (filePath: string) => {
   if (filePath === "~") return os.homedir();
-  if (filePath.startsWith("~/")) return path.join(os.homedir(), filePath.slice(2));
+  if (filePath.startsWith("~/"))
+    return path.join(os.homedir(), filePath.slice(2));
   return filePath;
 };
 
@@ -111,15 +112,15 @@ const loadProgram = (provider: anchor.AnchorProvider) => {
 };
 
 const fundWalletIfNeeded = async (provider: anchor.AnchorProvider) => {
-  const minimumLamports = Number(env("MIN_AUTHORITY_SOL", "1")) * LAMPORTS_PER_SOL;
+  const minimumLamports =
+    Number(env("MIN_AUTHORITY_SOL", "1")) * LAMPORTS_PER_SOL;
   const currentLamports = await provider.connection.getBalance(
     provider.wallet.publicKey
   );
 
   if (currentLamports >= minimumLamports) return;
 
-  const requestedLamports =
-    Number(env("AIRDROP_SOL", "2")) * LAMPORTS_PER_SOL;
+  const requestedLamports = Number(env("AIRDROP_SOL", "2")) * LAMPORTS_PER_SOL;
   console.log(
     `Requesting ${(requestedLamports / LAMPORTS_PER_SOL).toFixed(
       2
@@ -145,13 +146,16 @@ const ensureCollateralMint = async (provider: anchor.AnchorProvider) => {
     mintKeypair.publicKey
   );
   if (existingMint) {
-    console.log(`Collateral mint already exists ${mintKeypair.publicKey.toBase58()}`);
+    console.log(
+      `Collateral mint already exists ${mintKeypair.publicKey.toBase58()}`
+    );
     return mintKeypair.publicKey;
   }
 
   const decimals = Number(env("COLLATERAL_DECIMALS", "6"));
-  const lamports =
-    await provider.connection.getMinimumBalanceForRentExemption(MINT_SIZE);
+  const lamports = await provider.connection.getMinimumBalanceForRentExemption(
+    MINT_SIZE
+  );
   const tx = new Transaction().add(
     SystemProgram.createAccount({
       fromPubkey: provider.wallet.publicKey,

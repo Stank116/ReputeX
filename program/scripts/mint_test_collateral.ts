@@ -1,4 +1,9 @@
-import { PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -12,8 +17,16 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
   "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 );
 const PROGRAM_ROOT = path.resolve(__dirname, "..");
-const DEFAULT_AUTHORITY_PATH = path.join(PROGRAM_ROOT, ".devnet", "authority.json");
-const DEFAULT_MINT_PATH = path.join(PROGRAM_ROOT, ".devnet", "collateral-mint.json");
+const DEFAULT_AUTHORITY_PATH = path.join(
+  PROGRAM_ROOT,
+  ".devnet",
+  "authority.json"
+);
+const DEFAULT_MINT_PATH = path.join(
+  PROGRAM_ROOT,
+  ".devnet",
+  "collateral-mint.json"
+);
 
 const env = (name: string, fallback?: string) => {
   const value = process.env[name] ?? fallback;
@@ -70,7 +83,8 @@ const mintToInstruction = (
   });
 
 const collateralMint = () => {
-  if (process.env.COLLATERAL_MINT) return new PublicKey(process.env.COLLATERAL_MINT);
+  if (process.env.COLLATERAL_MINT)
+    return new PublicKey(process.env.COLLATERAL_MINT);
   if (!fs.existsSync(DEFAULT_MINT_PATH)) {
     throw new Error(
       `No COLLATERAL_MINT provided and no generated mint found at ${DEFAULT_MINT_PATH}. Run bootstrap:devnet first.`
@@ -104,13 +118,23 @@ async function main() {
   const tx = new Transaction();
 
   if (!(await provider.connection.getAccountInfo(recipientAta))) {
-    tx.add(createAssociatedTokenAccountInstruction(provider.wallet.publicKey, recipientOwner, mint));
+    tx.add(
+      createAssociatedTokenAccountInstruction(
+        provider.wallet.publicKey,
+        recipientOwner,
+        mint
+      )
+    );
   }
 
-  tx.add(mintToInstruction(mint, recipientAta, provider.wallet.publicKey, amount));
+  tx.add(
+    mintToInstruction(mint, recipientAta, provider.wallet.publicKey, amount)
+  );
 
   const signature = await provider.sendAndConfirm(tx);
-  console.log(`Minted ${uiAmount} collateral tokens to ${recipientAta.toBase58()}`);
+  console.log(
+    `Minted ${uiAmount} collateral tokens to ${recipientAta.toBase58()}`
+  );
   console.log(`Signature: ${signature}`);
 }
 

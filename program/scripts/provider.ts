@@ -6,7 +6,8 @@ import path from "path";
 
 const expandPath = (filePath: string) => {
   if (filePath === "~") return os.homedir();
-  if (filePath.startsWith("~/")) return path.join(os.homedir(), filePath.slice(2));
+  if (filePath.startsWith("~/"))
+    return path.join(os.homedir(), filePath.slice(2));
   return filePath;
 };
 
