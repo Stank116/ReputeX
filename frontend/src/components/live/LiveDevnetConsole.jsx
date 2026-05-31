@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { DEFAULT_IDL_PATH, DEFAULT_RPC_URL, PROGRAM_ID } from "../../config/markets";
+import { DEFAULT_IDL_PATH, DEFAULT_RPC_URL, DEFAULT_SOL_PYTH_PRICE_UPDATE, PROGRAM_ID } from "../../config/markets";
 import { safeJson, shortKey } from "../../lib/format";
 import {
   PublicKey,
@@ -23,7 +23,7 @@ const initialForm = {
   programId: PROGRAM_ID,
   idlPath: DEFAULT_IDL_PATH,
   ownerTokenAccount: "",
-  priceUpdateAccount: "",
+  priceUpdateAccount: DEFAULT_SOL_PYTH_PRICE_UPDATE,
   marketIndex: 0,
   positionId: 0,
   amount: 100,
@@ -73,27 +73,51 @@ export function LiveDevnetConsole() {
     await refreshState(nextProgram, connectedWallet);
   };
 
-  const derivePdas = (targetProgram = program, targetWallet = wallet) => {
+  const derivePdas = (targetProgram = program, targetWallet = wallet, overrides = {}) => {
     if (!targetProgram || !targetWallet) throw new Error("Load the program first");
     return deriveTradingPdas(
       targetProgram.programId,
       targetWallet.publicKey,
-      Number(form.marketIndex),
-      Number(form.positionId)
+      Number(overrides.marketIndex ?? form.marketIndex),
+      Number(overrides.positionId ?? form.positionId)
     );
   };
 
   const refreshState = async (targetProgram = program, targetWallet = wallet) => {
     if (!targetProgram || !targetWallet) throw new Error("Load the program first");
-    const accounts = derivePdas(targetProgram, targetWallet);
+    let accounts = derivePdas(targetProgram, targetWallet);
     const output = {};
 
-    for (const [name, pubkey] of Object.entries(accounts)) {
-      output[`${name}Pda`] = pubkey.toBase58();
+    const setDerivedOutput = (derivedAccounts) => {
+      for (const [name, pubkey] of Object.entries(derivedAccounts)) {
+        output[`${name}Pda`] = pubkey.toBase58();
+      }
+    };
+
+    try {
+      output.protocol = await targetProgram.account.protocol.fetch(accounts.protocol);
+    } catch {
+      output.protocol = "not initialized";
     }
 
+    if (output.protocol !== "not initialized") {
+      const collateralMint = new PublicKey(output.protocol.collateralMint);
+      const ownerAta = associatedTokenAddress(accounts.owner, collateralMint);
+      const nextPositionId = Number(output.protocol.nextPositionId.toString());
+      output.ownerAssociatedTokenAccount = ownerAta.toBase58();
+      if (Number(form.positionId) === 0 && nextPositionId > 0) {
+        accounts = derivePdas(targetProgram, targetWallet, { positionId: nextPositionId });
+      }
+      setForm((current) => ({
+        ...current,
+        ownerTokenAccount: current.ownerTokenAccount || ownerAta.toBase58(),
+        positionId: Number(current.positionId) === 0 && nextPositionId > 0 ? nextPositionId : current.positionId,
+      }));
+    }
+
+    setDerivedOutput(accounts);
+
     for (const [name, fetcher] of [
-      ["protocol", () => targetProgram.account.protocol.fetch(accounts.protocol)],
       ["market", () => targetProgram.account.market.fetch(accounts.market)],
       ["profile", () => targetProgram.account.traderProfile.fetch(accounts.traderProfile)],
       ["margin", () => targetProgram.account.marginAccount.fetch(accounts.marginAccount)],
@@ -104,13 +128,6 @@ export function LiveDevnetConsole() {
       } catch {
         output[name] = "not initialized";
       }
-    }
-
-    if (output.protocol !== "not initialized") {
-      const collateralMint = new PublicKey(output.protocol.collateralMint);
-      const ownerAta = associatedTokenAddress(accounts.owner, collateralMint);
-      output.ownerAssociatedTokenAccount = ownerAta.toBase58();
-      setForm((current) => (current.ownerTokenAccount ? current : { ...current, ownerTokenAccount: ownerAta.toBase58() }));
     }
 
     setStateOutput(safeJson(output));

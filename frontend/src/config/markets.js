@@ -1,6 +1,7 @@
 export const PROGRAM_ID = "EcKorS8y9kXHXQDjzN9eBYuhKqtdDFhypD9ceYfFKpfH";
 export const DEFAULT_RPC_URL = "https://api.devnet.solana.com";
 export const DEFAULT_IDL_PATH = "/idl/reputex.json";
+export const DEFAULT_SOL_PYTH_PRICE_UPDATE = "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE";
 
 export const markets = [
   {
