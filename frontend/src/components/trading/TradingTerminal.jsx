@@ -56,7 +56,8 @@ export function TradingTerminal() {
   };
   const maintenanceMargin = (position) => (position.size * MAINTENANCE_MARGIN_BPS) / BASIS_POINTS;
   const positionEquity = (position, marketList = markets) => position.collateral + positionPnl(position, marketList);
-  const freeCollateral = Math.max(balance - locked, 0);
+  const pendingCollateral = pendingOrders.reduce((sum, order) => sum + order.collateral, 0);
+  const freeCollateral = Math.max(balance - locked - pendingCollateral, 0);
   const unrealizedPnl = positions.reduce((sum, position) => sum + positionPnl(position), 0);
   const accountEquity = balance + unrealizedPnl;
 
@@ -126,6 +127,7 @@ export function TradingTerminal() {
   const addMarginToPosition = (id, amount) => {
     if (!Number.isFinite(amount) || amount <= 0) {
       setTicketMessage("Margin amount must be above zero.");
+      notify("Margin amount must be above zero", "warn");
       return;
     }
     if (freeCollateral < amount) {
@@ -165,6 +167,7 @@ export function TradingTerminal() {
             return updated.length > 90 ? updated.slice(1) : updated;
           })
         );
+        const triggeredOrderIds = new Set();
         pendingOrders.forEach((order) => {
           const mark = nextMarkets[order.marketIndex].price;
           const triggered =
@@ -176,11 +179,13 @@ export function TradingTerminal() {
                 ? mark >= order.price
                 : mark <= order.price;
           if (triggered) {
+            triggeredOrderIds.add(order.id);
             executeOpenPosition(order, nextMarkets, true);
           }
         });
         setPendingOrders((orders) =>
           orders.filter((order) => {
+            if (triggeredOrderIds.has(order.id)) return false;
             const mark = nextMarkets[order.marketIndex].price;
             return order.type === "limit"
               ? order.isLong
@@ -205,6 +210,15 @@ export function TradingTerminal() {
 
   const executeOpenPosition = (order, marketList = markets, fromTrigger = false) => {
     const selectedMarket = marketList[order.marketIndex];
+    const reservedByOtherOrders = pendingOrders
+      .filter((item) => item.id !== order.id)
+      .reduce((sum, item) => sum + item.collateral, 0);
+    const executableFreeCollateral = Math.max(balance - locked - reservedByOtherOrders, 0);
+    if (executableFreeCollateral < order.collateral) {
+      setTicketMessage("Order skipped because free collateral changed.");
+      notify("Order skipped: insufficient free collateral", "warn");
+      return;
+    }
     const position = {
       id: order.positionId,
       marketIndex: order.marketIndex,
@@ -225,19 +239,23 @@ export function TradingTerminal() {
   const openPosition = () => {
     if (!connected) {
       setTicketMessage("Connect the demo session first.");
+      notify("Connect the demo session first", "warn");
       return;
     }
     const collateral = Number(collateralInput);
     if (!Number.isFinite(collateral) || collateral <= 0) {
       setTicketMessage("Collateral must be above zero.");
+      notify("Collateral must be above zero", "warn");
       return;
     }
     if (leverage < 1 || leverage > maxLeverage) {
       setTicketMessage(`Current reputation allows up to ${maxLeverage}x.`);
+      notify(`Current reputation allows up to ${maxLeverage}x`, "warn");
       return;
     }
     if (freeCollateral < collateral) {
       setTicketMessage("Insufficient free collateral.");
+      notify("Insufficient free collateral", "warn");
       return;
     }
 
@@ -259,7 +277,26 @@ export function TradingTerminal() {
 
     if (!Number.isFinite(order.price) || order.price <= 0) {
       setTicketMessage("Conditional orders need a valid price.");
+      notify("Conditional orders need a valid price", "warn");
       return;
+    }
+
+    if (order.type === "limit") {
+      const crossesBook = order.isLong ? order.price >= active.price : order.price <= active.price;
+      if (crossesBook) {
+        setTicketMessage("Limit price would execute immediately. Use Market or pick a passive price.");
+        notify("Limit price crosses the current mark", "warn");
+        return;
+      }
+    }
+
+    if (order.type === "stop") {
+      const invalidStop = order.isLong ? order.price <= active.price : order.price >= active.price;
+      if (invalidStop) {
+        setTicketMessage("Stop trigger must be above mark for longs and below mark for shorts.");
+        notify("Stop trigger is on the wrong side of mark", "warn");
+        return;
+      }
     }
 
     setPendingOrders((orders) => [order, ...orders].slice(0, 8));
@@ -296,6 +333,7 @@ export function TradingTerminal() {
     }
     if (freeCollateral < amount) {
       setTicketMessage("Insufficient free collateral.");
+      notify("Insufficient free collateral", "warn");
       return;
     }
     setBalance((value) => value - amount);
@@ -325,6 +363,7 @@ export function TradingTerminal() {
         <Stat label="Equity" value={fmt(accountEquity)} />
         <Stat label="Free" value={fmt(freeCollateral)} />
         <Stat label="Margin used" value={`${marginUsage.toFixed(1)}%`} tone={marginUsage > 70 ? "warn" : "up"} />
+        <Stat label="Reserved" value={fmt(pendingCollateral)} tone={pendingCollateral > 0 ? "warn" : undefined} />
         <Stat label="Reputation" value={profile.reputationScore} />
         <button
           className="primary-action"

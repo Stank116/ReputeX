@@ -60,8 +60,36 @@ export function LiveDevnetConsole() {
     if (message.includes("User rejected")) return "Wallet rejected the transaction.";
     if (message.includes("insufficient")) return "Insufficient funds or collateral for this transaction.";
     if (message.includes("Blockhash")) return "Network blockhash expired. Retry the transaction.";
+    if (message.includes("ManualPriceUpdateDisabled")) return "Manual price updates are disabled while oracle pricing is enabled.";
+    if (message.includes("PriceTooOld")) return "Oracle price is stale. Refresh the Pyth price update account.";
+    if (message.includes("ConfidenceTooWide")) return "Oracle confidence is too wide for this market.";
+    if (message.includes("InvalidLeverage")) return "Requested leverage is above the market or reputation limit.";
+    if (message.includes("PositionNotLiquidatable")) return "This position is still above maintenance margin.";
     if (message.includes("Account does not exist")) return "Required account is missing. Create profile/token account first.";
     return message.replace(/^Error:\s*/, "");
+  };
+
+  const parsePositiveInteger = (value, label) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
+      throw new Error(`${label} must be a positive whole number.`);
+    }
+    return parsed;
+  };
+
+  const parseNonNegativeInteger = (value, label) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+      throw new Error(`${label} must be zero or a positive whole number.`);
+    }
+    return parsed;
+  };
+
+  const requireOwnerTokenAccount = () => {
+    if (!form.ownerTokenAccount.trim()) {
+      throw new Error("Owner token account is missing. Load Program or Create Token Account first.");
+    }
+    return new PublicKey(form.ownerTokenAccount);
   };
 
   const connectWallet = async () => {
@@ -75,6 +103,7 @@ export function LiveDevnetConsole() {
   const loadProgram = async () => {
     const connectedWallet = wallet ?? (await connectWallet());
     if (!programKey) throw new Error("Program ID is invalid");
+    if (!form.rpcUrl.trim()) throw new Error("RPC URL is required");
     const nextProvider = createAnchorProvider(form.rpcUrl, connectedWallet);
     const idl = await fetchIdl(form.idlPath);
     const nextProgram = createProgram(idl, form.programId, nextProvider);
@@ -216,11 +245,12 @@ export function LiveDevnetConsole() {
     return transactionBuilder.preInstructions([refreshIx]);
   };
 
-  const liveAmount = () => new anchor.BN(Math.trunc(Number(form.amount)));
-  const livePositionId = () => new anchor.BN(Math.trunc(Number(form.positionId)));
-  const liveMarketIndex = () => new anchor.BN(Math.trunc(Number(form.marketIndex)));
+  const liveAmount = () => new anchor.BN(parsePositiveInteger(form.amount, "Amount"));
+  const livePositionId = () => new anchor.BN(parseNonNegativeInteger(form.positionId, "Position ID"));
+  const liveMarketIndex = () => new anchor.BN(parseNonNegativeInteger(form.marketIndex, "Market index"));
+  const liveLeverage = () => parsePositiveInteger(form.leverage, "Leverage");
 
-  const run = (action) => action().catch((error) => log(error.message));
+  const run = (action) => action().catch((error) => log(friendlyError(error)));
 
   return (
     <section className="live-grid">
@@ -309,7 +339,7 @@ export function LiveDevnetConsole() {
                     protocol: accounts.protocol,
                     marginAccount: accounts.marginAccount,
                     collateralVault: accounts.collateralVault,
-                    ownerTokenAccount: new PublicKey(form.ownerTokenAccount),
+                    ownerTokenAccount: requireOwnerTokenAccount(),
                     owner: accounts.owner,
                     tokenProgram: TOKEN_PROGRAM_ID,
                   });
@@ -329,7 +359,7 @@ export function LiveDevnetConsole() {
                     protocol: accounts.protocol,
                     marginAccount: accounts.marginAccount,
                     collateralVault: accounts.collateralVault,
-                    ownerTokenAccount: new PublicKey(form.ownerTokenAccount),
+                    ownerTokenAccount: requireOwnerTokenAccount(),
                     owner: accounts.owner,
                     tokenProgram: TOKEN_PROGRAM_ID,
                   });
@@ -379,7 +409,7 @@ export function LiveDevnetConsole() {
                 send("open position", async () => {
                   const accounts = derivePdas();
                   const tx = program.methods
-                    .openPosition(livePositionId(), liveMarketIndex(), form.side === "long", liveAmount(), Number(form.leverage))
+                    .openPosition(livePositionId(), liveMarketIndex(), form.side === "long", liveAmount(), liveLeverage())
                     .accountsStrict({
                       protocol: accounts.protocol,
                       market: accounts.market,
@@ -432,7 +462,7 @@ export function LiveDevnetConsole() {
                     trader: accounts.owner,
                     liquidator: accounts.owner,
                     collateralVault: accounts.collateralVault,
-                    liquidatorTokenAccount: new PublicKey(form.ownerTokenAccount),
+                    liquidatorTokenAccount: requireOwnerTokenAccount(),
                     tokenProgram: TOKEN_PROGRAM_ID,
                   });
                   return withPythRefresh(tx, accounts);
