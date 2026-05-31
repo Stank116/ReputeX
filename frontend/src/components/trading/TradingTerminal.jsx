@@ -8,26 +8,49 @@ import {
   BASIS_POINTS,
   MAINTENANCE_MARGIN_BPS,
   calculateReputation,
-  liquidationPrice,
   reputationLeverageCap,
   seedHistory,
 } from "../../lib/perps";
-import { Preview, Stat } from "../shared/Stat";
+import { Stat } from "../shared/Stat";
 import { OrderBook } from "./OrderBook";
 import { Portfolio } from "./Portfolio";
 import { PriceChart } from "./PriceChart";
 import { ProfilePanel } from "./ProfilePanel";
 
-const chartFrames = ["1m", "5m", "15m", "1h", "4h", "1d"];
-const leveragePresets = [1, 2, 3, 4, 5];
+const chartFrames = ["1m", "5m", "15m", "1H", "4H", "1D"];
 const sizingPresets = [25, 50, 75, 100];
 const accountNumber = (value, fallback = 0) => Number(value?.toString?.() ?? value ?? fallback);
+const numberFormatter = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+const fixedNumberFormatter = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 const displayPrice = (market) => {
   if (!market) return 0;
   const raw = accountNumber(market.price);
   const explicitDecimals = accountNumber(market.priceDecimals);
   const inferredDecimals = explicitDecimals || (raw >= 1_000_000 ? 6 : 0);
   return raw / 10 ** inferredDecimals;
+};
+const formatMarkPrice = (value) => {
+  const price = Number(value) || 0;
+  if (price >= 100) return Math.round(price).toLocaleString("en-US");
+  if (Number.isInteger(price)) return price.toLocaleString("en-US");
+  return numberFormatter.format(price);
+};
+const formatFixedPrice = (value) => fixedNumberFormatter.format(Number(value) || 0);
+const nextFundingCountdown = () => {
+  const now = new Date();
+  const nextHour = new Date(now);
+  nextHour.setHours(now.getHours() + 1, 0, 0, 0);
+  const totalSeconds = Math.max(0, Math.floor((nextHour.getTime() - now.getTime()) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map((unit) => String(unit).padStart(2, "0")).join(":");
 };
 
 function MiniSparkline({ points, positive }) {
@@ -73,10 +96,9 @@ export function TradingTerminal({ viewMode = "trade" }) {
   const [activity, setActivity] = useState(["Session ready"]);
   const [collateralInput, setCollateralInput] = useState(500);
   const [cashInput, setCashInput] = useState(2500);
-  const [leverageInput, setLeverageInput] = useState(2);
+  const [leverageInput, setLeverageInput] = useState(5);
   const [orderType, setOrderType] = useState("market");
   const [limitPriceInput, setLimitPriceInput] = useState("");
-  const [triggerPriceInput, setTriggerPriceInput] = useState("");
   const [pendingOrders, setPendingOrders] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [ticketMessage, setTicketMessage] = useState("");
@@ -321,8 +343,8 @@ export function TradingTerminal({ viewMode = "trade" }) {
 
   const openPosition = () => {
     if (!live.wallet && !connected) {
-      setTicketMessage("Connect Phantom or the demo session first.");
-      notify("Connect Phantom first", "warn");
+      setTicketMessage("Connect Wallet or the demo session first.");
+      notify("Connect Wallet first", "warn");
       return;
     }
     const collateral = Number(collateralInput);
@@ -344,7 +366,7 @@ export function TradingTerminal({ viewMode = "trade" }) {
 
     if (live.wallet) {
       if (orderType !== "market") {
-        setTicketMessage("Limit and stop orders are shown in the UI, but your current on-chain program only supports market open/close.");
+        setTicketMessage("Limit orders are shown in the UI, but your current on-chain program only supports market open/close.");
         notify("On-chain limit orders need backend support", "warn");
         return;
       }
@@ -374,7 +396,7 @@ export function TradingTerminal({ viewMode = "trade" }) {
       isLong: side === "long",
       collateral,
       leverage,
-      price: orderType === "limit" ? Number(limitPriceInput) : Number(triggerPriceInput),
+      price: orderType === "limit" ? Number(limitPriceInput) : displayActive.price,
     };
 
     if (orderType === "market") {
@@ -397,20 +419,11 @@ export function TradingTerminal({ viewMode = "trade" }) {
       }
     }
 
-    if (order.type === "stop") {
-      const invalidStop = order.isLong ? order.price <= displayActive.price : order.price >= displayActive.price;
-      if (invalidStop) {
-        setTicketMessage("Stop trigger must be above mark for longs and below mark for shorts.");
-        notify("Stop trigger is on the wrong side of mark", "warn");
-        return;
-      }
-    }
-
     setPendingOrders((orders) => [order, ...orders].slice(0, 8));
     setNextPositionId((value) => value + 1);
-    setTicketMessage(`${orderType === "limit" ? "Limit" : "Stop"} order placed.`);
+    setTicketMessage("Limit order placed.");
     log(`Placed ${orderType} ${side} ${active.symbol} trigger ${fmt(order.price)}`);
-    notify(`${orderType === "limit" ? "Limit" : "Stop"} order placed`, "info");
+    notify("Limit order placed", "info");
   };
 
   const depositCollateral = () => {
@@ -488,29 +501,20 @@ export function TradingTerminal({ viewMode = "trade" }) {
     notify(`Withdrew ${fmt(amount)}`, "success");
   };
 
-  const collateral = Math.max(Number(collateralInput) || 0, 0);
-  const size = collateral * leverage;
-  const liquidation = liquidationPrice(collateral, leverage, side === "long", displayActive.price);
   const marginUsage = visibleAccountEquity > 0 ? clamp((visibleLocked / visibleAccountEquity) * 100, 0, 100) : 0;
-  const liquidationDistance = displayActive.price > 0 ? Math.abs((displayActive.price - liquidation) / displayActive.price) * 100 : 0;
-  const estimatedFee = size * 0.0005;
   const activePendingOrders = pendingOrders.filter((order) => order.marketIndex === activeMarket);
   const positionMargin = visiblePositions.reduce((sum, position) => sum + position.collateral, 0);
   const marketVolume = marketQuote?.volume24h;
-  const marketHigh = marketQuote?.high24h;
-  const marketLow = marketQuote?.low24h;
-  const marketCap = marketQuote?.marketCap;
   const chartPoints = marketQuote?.sparkline?.length > 4 ? marketQuote.sparkline : history[activeMarket];
-  const marketUpdatedAt = marketData.lastUpdated
-    ? marketData.lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "loading";
-  const nextFundingMinutes = 60 - new Date().getMinutes();
-  const orderPriceLabel =
-    orderType === "market"
-      ? fmt(displayActive.price)
-      : orderType === "limit"
-        ? limitPriceInput || displayActive.price.toFixed(2)
-        : triggerPriceInput || (side === "long" ? (displayActive.price * 1.01).toFixed(2) : (displayActive.price * 0.99).toFixed(2));
+  const fundingCountdown = nextFundingCountdown();
+  const markPriceDisplay = formatMarkPrice(displayActive.price);
+  const lastCandlePoints = chartPoints.slice(-4);
+  const chartOhlc = {
+    open: lastCandlePoints[0] ?? displayActive.price,
+    high: Math.max(...(lastCandlePoints.length ? lastCandlePoints : [displayActive.price])),
+    low: Math.min(...(lastCandlePoints.length ? lastCandlePoints : [displayActive.price])),
+    close: lastCandlePoints.at(-1) ?? displayActive.price,
+  };
   const setCollateralByPercent = (percent) => {
     const amount = Math.floor((visibleFreeCollateral * percent) / 100);
     setCollateralInput(amount > 0 ? amount : 0);
@@ -605,7 +609,7 @@ export function TradingTerminal({ viewMode = "trade" }) {
           <Stat label="Reserved" value={fmt(pendingCollateral)} tone={pendingCollateral > 0 ? "warn" : undefined} />
           <Stat label="Reputation" value={activeProfile.reputationScore} />
           <button className="primary-action" type="button" onClick={() => live.connectAndLoad().catch((error) => setTicketMessage(error.message))}>
-            {live.wallet ? "Refresh Wallet" : "Connect Phantom"}
+            {live.wallet ? "Refresh Wallet" : "Connect Wallet"}
           </button>
         </section>
         <section className="portfolio-page" aria-label="Portfolio overview">
@@ -654,7 +658,7 @@ export function TradingTerminal({ viewMode = "trade" }) {
           </div>
         ))}
       </div>
-      <section className="account-strip terminal-account" aria-label="Account state">
+      {false && <section className="account-strip terminal-account" aria-label="Account state">
         <Stat label="Session" value={live.wallet ? "Phantom devnet" : connected ? "Demo wallet" : "Disconnected"} />
         <Stat label="Equity" value={fmt(visibleAccountEquity)} />
         <Stat label="Free" value={fmt(visibleFreeCollateral)} />
@@ -662,11 +666,11 @@ export function TradingTerminal({ viewMode = "trade" }) {
         <Stat label="Reserved" value={fmt(pendingCollateral)} tone={pendingCollateral > 0 ? "warn" : undefined} />
         <Stat label="Reputation" value={activeProfile.reputationScore} />
         <button className="primary-action" type="button" onClick={() => live.connectAndLoad().catch((error) => setTicketMessage(error.message))}>
-          {live.wallet ? "Refresh Wallet" : "Connect Phantom"}
+          {live.wallet ? "Refresh Wallet" : "Connect Wallet"}
         </button>
-      </section>
+      </section>}
 
-      <section className="live-setup-strip" aria-label="Live trading setup">
+      {false && <section className="live-setup-strip" aria-label="Live trading setup">
         <div>
           <span>Wallet</span>
           <strong>{live.walletStatus}</strong>
@@ -693,79 +697,57 @@ export function TradingTerminal({ viewMode = "trade" }) {
           Refresh State
         </button>
         <p>{live.busyAction ? `Pending: ${live.busyAction}` : live.status}</p>
-      </section>
+      </section>}
 
-      <section className="market-row" aria-label="Market selector">
-        <div className="market-tabs">
-          {markets.map((market, index) => {
-            const quote = marketData.quotes[market.symbol];
-            const change = quote?.change24h ?? market.change;
-            return (
-              <button
-                className={`market-tab ${index === activeMarket ? "active" : ""}`}
-                key={market.symbol}
-                type="button"
-                onClick={() => setActiveMarket(index)}
-              >
-                <strong>{market.symbol}</strong>
-                <span className={change >= 0 ? "up" : "down"}>
-                  {fmt(quote?.price ?? market.price)} {pct(change)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+      <section className="market-row" aria-label="Market stats">
         <div className="market-stats market-overview">
           <div className="market-identity">
-            <strong>{active.symbol}</strong>
-            <span>{displayActive.oracle}</span>
+            <div className="market-asset">
+              <span className="market-avatar" aria-hidden="true" />
+              <div>
+                <strong>{active.symbol}</strong>
+                <span>PERPETUAL</span>
+              </div>
+            </div>
+            <div className="mark-price-block">
+              <span>MARK PRICE</span>
+              <strong>{markPriceDisplay}</strong>
+            </div>
           </div>
-          <Stat label="Mark" value={fmt(displayActive.price)} />
-          <Stat label="24h" value={pct(displayActive.change)} tone={displayActive.change >= 0 ? "up" : "down"} />
-          <Stat label="24h volume" value={Number.isFinite(marketVolume) ? fmt(marketVolume, 0) : "Loading"} />
-          <Stat label="24h high / low" value={Number.isFinite(marketHigh) && Number.isFinite(marketLow) ? `${fmt(marketHigh)} / ${fmt(marketLow)}` : "Loading"} />
-          <Stat label="Market cap" value={Number.isFinite(marketCap) ? fmt(marketCap, 0) : "Loading"} />
-          <Stat label="Protocol OI" value={fmt(openInterestFor(activeMarket), 0)} />
+          <Stat label="24H CHANGE ●" value={pct(displayActive.change)} tone={displayActive.change >= 0 ? "up" : "down"} />
+          <Stat label="24H VOLUME ●" value={Number.isFinite(marketVolume) ? fmt(marketVolume, 0) : "Loading"} />
+          <Stat label="OPEN INTEREST ●" value={fmt(openInterestFor(activeMarket), 0)} />
           <Stat
-            label="Funding / 1h"
+            label="FUNDING / 1H"
             value={`${displayActive.funding >= 0 ? "+" : ""}${displayActive.funding.toFixed(3)}%`}
             tone={displayActive.funding >= 0 ? "up" : "down"}
           />
-          <Stat label="Next funding" value={`${nextFundingMinutes}m`} />
-          <Stat label="Taker fee" value="0.05%" />
-          <Stat label="Data" value={`${marketQuote?.source ?? marketData.status} ${marketUpdatedAt}`} />
-          <MiniSparkline points={chartPoints.slice(-28)} positive={displayActive.change >= 0} />
+          <Stat label="NEXT FUNDING" value={fundingCountdown} />
+          <Stat label="TAKER FEE" value="0.10%" />
+          <Stat label="INIT / MAINT" value="10% / 5%" />
+          <div className="sparkline-card">
+            <span>24H · PYTH</span>
+            <MiniSparkline points={chartPoints.slice(-28)} positive={displayActive.change >= 0} />
+          </div>
         </div>
       </section>
 
       <section className="workspace">
         <section className="chart-panel" aria-label="Price chart">
-          <div className="panel-heading">
-            <h2>{active.symbol}</h2>
-            <div className="segmented" role="group" aria-label="Chart timeframe">
+          <div className="chart-toolbar">
+            <div className="timeframe-tabs" role="group" aria-label="Chart timeframe">
               {chartFrames.map((item) => (
-                <button className={`segment ${timeframe === item ? "active" : ""}`} key={item} type="button" onClick={() => setTimeframe(item)}>
+                <button className={`timeframe-tab ${timeframe === item ? "active" : ""}`} key={item} type="button" onClick={() => setTimeframe(item)}>
                   {item}
                 </button>
               ))}
             </div>
+            <div className="ohlc-line">
+              O {formatFixedPrice(chartOhlc.open)} H {formatFixedPrice(chartOhlc.high)} L {formatFixedPrice(chartOhlc.low)} C{" "}
+              {formatFixedPrice(chartOhlc.close)} {active.base}/USD · Pyth
+            </div>
           </div>
           <PriceChart points={chartPoints} positive={displayActive.change >= 0} />
-          <div className="trade-tape">
-            {chartPoints
-              .slice(-5)
-              .reverse()
-              .map((price, index, list) => {
-                const previous = list[index + 1] ?? price;
-                const up = price >= previous;
-                return (
-                  <div className="tape-print" key={`${price}-${index}`}>
-                    <strong className={up ? "up" : "down"}>{fmt(price)}</strong>
-                    <span>{up ? "Up tick" : "Down tick"} {active.base}</span>
-                  </div>
-                );
-              })}
-          </div>
         </section>
 
         <OrderBook market={displayActive} />
@@ -775,7 +757,6 @@ export function TradingTerminal({ viewMode = "trade" }) {
             {[
               ["market", "Market"],
               ["limit", "Limit"],
-              ["stop", "Stop"],
             ].map(([value, label]) => (
               <button className={orderType === value ? "active" : ""} key={value} type="button" onClick={() => setOrderType(value)}>
                 {label}
@@ -791,25 +772,28 @@ export function TradingTerminal({ viewMode = "trade" }) {
             </button>
           </div>
           <div className="available-row">
-            <span>Available</span>
+            <span>AVAILABLE</span>
+            <i aria-hidden="true" />
             <strong>{fmt(visibleFreeCollateral)}</strong>
           </div>
-          <label>
-            Price
+          <label className="ticket-field">
+            <span>PRICE (USD)</span>
             <input
               disabled={orderType === "market"}
               min="0.01"
+              placeholder={orderType === "market" ? "Market" : undefined}
               step="0.01"
-              type="number"
-              value={orderType === "market" ? displayActive.price.toFixed(2) : orderType === "limit" ? limitPriceInput : triggerPriceInput}
-              onChange={(event) =>
-                orderType === "limit" ? setLimitPriceInput(event.target.value) : setTriggerPriceInput(event.target.value)
-              }
+              type={orderType === "market" ? "text" : "number"}
+              value={orderType === "market" ? "" : limitPriceInput}
+              onChange={(event) => setLimitPriceInput(event.target.value)}
             />
           </label>
-          <label>
-            Collateral
-            <input min="1" step="1" type="number" value={collateralInput} onChange={(event) => setCollateralInput(event.target.value)} />
+          <label className="ticket-field">
+            <span>SIZE (SOL)</span>
+            <div className="input-with-suffix">
+              <input min="1" step="1" type="number" value={collateralInput} onChange={(event) => setCollateralInput(event.target.value)} />
+              <span>SOL</span>
+            </div>
           </label>
           <div className="quick-grid" role="group" aria-label="Collateral percentage">
             {sizingPresets.map((item) => (
@@ -818,41 +802,21 @@ export function TradingTerminal({ viewMode = "trade" }) {
               </button>
             ))}
           </div>
-          <label>
-            Leverage
-            <input max={maxLeverage} min="1" step="1" type="range" value={leverage} onChange={(event) => setLeverageInput(event.target.value)} />
-            <span>
-              {leverage}x max {maxLeverage}x
-            </span>
+          <label className="ticket-field leverage-field">
+            <div className="field-row">
+              <span>LEVERAGE</span>
+              <strong>{leverage}x</strong>
+            </div>
+            <input max="25" min="1" step="1" type="range" value={leverage} onChange={(event) => setLeverageInput(event.target.value)} />
+            <div className="leverage-ticks" aria-hidden="true">
+              <span>1x</span>
+              <span>5x</span>
+              <span>10x</span>
+              <span>25x</span>
+            </div>
           </label>
-          <div className="leverage-presets" role="group" aria-label="Leverage presets">
-            {leveragePresets.map((item) => (
-              <button
-                className={leverage === item ? "active" : ""}
-                disabled={item > maxLeverage}
-                key={item}
-                type="button"
-                onClick={() => setLeverageInput(item)}
-              >
-                {item}x
-              </button>
-            ))}
-          </div>
-          <div className="ticket-preview">
-            <Preview label="Order value" value={fmt(size)} />
-            <Preview label="Size" value={fmt(size)} />
-            <Preview label="Price" value={orderPriceLabel} />
-            <Preview label="Margin required" value={fmt(collateral)} />
-            <Preview label="Liq. price" value={fmt(liquidation)} />
-            <Preview label="Liq. gap" value={`${liquidationDistance.toFixed(1)}%`} tone={liquidationDistance < 8 ? "down" : liquidationDistance < 18 ? "warn" : "up"} />
-            <Preview label="Maintenance" value={fmt((size * MAINTENANCE_MARGIN_BPS) / BASIS_POINTS)} />
-            <Preview label="Est. fee" value={fmt(estimatedFee)} />
-          </div>
-          <div className="risk-meter" aria-label="Liquidation risk meter">
-            <span style={{ "--risk": `${clamp(liquidationDistance * 4, 3, 100)}%` }} />
-          </div>
-          <button className="submit-order" type="button" onClick={openPosition}>
-            {orderType === "market" ? "Open" : "Place"} {side === "long" ? "Long" : "Short"}
+          <button className={`submit-order ${side}`} type="button" onClick={openPosition}>
+            {side === "long" ? "LONG / BUY" : "SHORT / SELL"}
           </button>
           <p className="ticket-message" role="status">
             {ticketMessage}
@@ -875,7 +839,7 @@ export function TradingTerminal({ viewMode = "trade" }) {
         </aside>
 
         <Portfolio {...portfolioProps} />
-        <ProfilePanel activity={[...live.activity, ...activity].slice(0, 12)} profile={activeProfile} />
+        {false && <ProfilePanel activity={[...live.activity, ...activity].slice(0, 12)} profile={activeProfile} />}
       </section>
     </>
   );

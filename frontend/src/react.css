@@ -1,5 +1,692 @@
+:root {
+  --bg: #0d1117;
+  --surface: #111820;
+  --surface-deep: #080b0e;
+  --line: #1e2a32;
+  --line-soft: #172129;
+  --text: #edf4f2;
+  --muted: #8c9aa7;
+  --green: #2ada9e;
+  --red: #ff5b6e;
+  --amber: #f4c456;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
 button,
 input,
 select {
-  border-radius: 0;
+  border-radius: 2px;
+}
+
+.terminal-shell {
+  width: 100%;
+  max-width: 1800px;
+  padding: 0 12px 12px;
+  background: var(--bg);
+}
+
+.topbar {
+  grid-template-columns: minmax(220px, 1fr) auto minmax(260px, 1fr);
+  min-height: 58px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: none;
+}
+
+.brand-block {
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  background: #101922;
+}
+
+.brand-triangle {
+  width: 0;
+  height: 0;
+  border-right: 8px solid transparent;
+  border-bottom: 14px solid var(--green);
+  border-left: 8px solid transparent;
+}
+
+.brand-block h1 {
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.brand-block p,
+.stat span,
+.preview-row span,
+.market-stats span,
+.ticket-field > span,
+.field-row span,
+.book-heading span,
+.network-status strong,
+.ohlc-line {
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.app-tabs {
+  border: 0;
+  background: transparent;
+  gap: 22px;
+}
+
+.app-tabs button {
+  min-width: auto;
+  height: 36px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 2px;
+}
+
+.app-tabs button.active {
+  background: transparent;
+  border-color: var(--green);
+  color: var(--text);
+}
+
+.topbar-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+}
+
+.network-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: max-content;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 12px rgba(42, 218, 158, 0.7);
+}
+
+.wallet-pill {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  background: #0a1015;
+  color: var(--text);
+  padding: 0 16px;
+  font-weight: 850;
+}
+
+.market-row {
+  display: block;
+  min-height: 76px;
+  margin-top: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: none;
+}
+
+.market-overview {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 22px;
+  min-width: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+
+.market-identity {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 260px;
+}
+
+.market-asset {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.market-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(42, 218, 158, 0.45);
+  background:
+    radial-gradient(circle at 32% 28%, #f4c456 0 18%, transparent 19%),
+    linear-gradient(135deg, #2ada9e, #51b8ff);
+}
+
+.market-asset strong,
+.mark-price-block strong {
+  color: var(--text);
+}
+
+.market-asset strong {
+  display: block;
+  font-size: 16px;
+}
+
+.market-asset span {
+  display: block;
+}
+
+.mark-price-block {
+  display: grid;
+  gap: 2px;
+}
+
+.mark-price-block strong {
+  font-size: 30px;
+  line-height: 0.95;
+}
+
+.market-overview .stat {
+  min-width: 112px;
+}
+
+.stat strong,
+.preview-row strong {
+  color: var(--text);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+}
+
+.sparkline-card {
+  display: grid;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.sparkline {
+  width: 132px;
+  height: 34px;
+}
+
+.sparkline path {
+  fill: none;
+  stroke-width: 2.2;
+}
+
+.sparkline .up-stroke {
+  stroke: var(--green);
+}
+
+.sparkline .down-stroke {
+  stroke: var(--red);
+}
+
+.workspace {
+  grid-template-columns: minmax(520px, 1.45fr) minmax(260px, 0.58fr) minmax(340px, 0.66fr);
+  grid-template-areas:
+    "chart book ticket"
+    "portfolio portfolio portfolio";
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.workspace > section,
+.workspace > aside,
+.overview-grid,
+.collateral-card,
+.portfolio-page .portfolio-panel,
+.portfolio-page .profile-panel {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.chart-panel {
+  min-height: 518px;
+}
+
+.chart-toolbar {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  min-height: 62px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.timeframe-tabs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.timeframe-tab {
+  min-width: 0;
+  height: 24px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.timeframe-tab.active {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.ohlc-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chart-shell {
+  background: var(--surface-deep);
+}
+
+.price-chart {
+  height: 455px;
+}
+
+.book-heading {
+  display: grid;
+  grid-template-columns: 1fr minmax(190px, 1.4fr);
+  align-items: center;
+  min-height: 42px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.book-heading h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.book-heading div,
+.book-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.book-heading span,
+.book-row span {
+  text-align: right;
+}
+
+.book-heading span:first-child,
+.book-row span:first-child {
+  text-align: left;
+}
+
+.book-grid {
+  grid-template-rows: 1fr 42px 1fr;
+  min-height: 430px;
+  height: calc(100% - 42px);
+}
+
+.book-row {
+  height: 30px;
+  padding: 0 10px;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
+.book-row::before {
+  inset: 2px 0 2px auto;
+  opacity: 1;
+}
+
+.book-row.ask::before {
+  background: rgba(255, 91, 110, 0.15);
+}
+
+.book-row.bid::before {
+  background: rgba(42, 218, 158, 0.12);
+}
+
+.book-row.ask span:first-child {
+  color: var(--red);
+}
+
+.book-row.bid span:first-child {
+  color: var(--green);
+}
+
+.book-mid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  border-block: 1px solid var(--line);
+  padding: 0 10px;
+  color: var(--text);
+}
+
+.book-mid strong {
+  grid-column: 2;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.book-mid span {
+  grid-column: 3;
+  justify-self: end;
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.ticket-panel {
+  padding: 14px;
+}
+
+.order-type-tabs {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+}
+
+.order-type-tabs button {
+  min-height: 34px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.order-type-tabs button.active {
+  background: transparent;
+  box-shadow: none;
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.side-toggle {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  height: 44px;
+  border: 1px solid var(--line);
+  background: #0a1015;
+}
+
+.side-toggle button {
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.side-toggle .long.active {
+  background: #1a3a2a;
+  color: var(--green);
+}
+
+.side-toggle .short.active {
+  background: #3a1a1e;
+  color: var(--red);
+}
+
+.available-row {
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+}
+
+.available-row i {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.available-row strong {
+  color: var(--text);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.ticket-field {
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ticket-field input,
+.input-with-suffix {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  background: #080c10;
+}
+
+.ticket-field input {
+  border-radius: 2px;
+}
+
+.ticket-field input:disabled {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.ticket-field input::placeholder {
+  color: var(--muted);
+}
+
+.input-with-suffix {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.input-with-suffix input {
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+}
+
+.input-with-suffix span {
+  padding-right: 10px;
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
+.quick-grid {
+  gap: 0;
+  margin-top: 10px;
+}
+
+.quick-grid button {
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.field-row strong {
+  color: var(--green);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.leverage-field input[type="range"] {
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+  accent-color: var(--green);
+}
+
+.leverage-ticks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  color: var(--muted);
+}
+
+.leverage-ticks span {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+}
+
+.leverage-ticks span:nth-child(2),
+.leverage-ticks span:nth-child(3) {
+  text-align: center;
+}
+
+.leverage-ticks span:last-child {
+  text-align: right;
+}
+
+.submit-order {
+  margin-top: 18px;
+  min-height: 44px;
+  border: 0;
+  color: #061014;
+  font-weight: 950;
+}
+
+.submit-order.long {
+  background: var(--green);
+}
+
+.submit-order.short {
+  background: var(--red);
+}
+
+.ticket-message {
+  min-height: 28px;
+  margin-top: 10px;
+}
+
+.table-tabs {
+  display: flex;
+  gap: 22px;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  padding: 0 12px;
+}
+
+.table-tabs button {
+  min-height: 40px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+}
+
+.table-tabs button.active {
+  border-color: var(--green);
+  background: transparent;
+  color: var(--green);
+}
+
+.panel-heading {
+  border-bottom-color: var(--line);
+}
+
+.risk-strip,
+.trade-tape,
+.chart-controls {
+  display: none;
+}
+
+.up,
+.long-text {
+  color: var(--green);
+}
+
+.down,
+.short-text {
+  color: var(--red);
+}
+
+.warn {
+  color: var(--amber);
+}
+
+@media (max-width: 1180px) {
+  .topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-actions,
+  .app-tabs {
+    justify-content: flex-start;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr 340px;
+    grid-template-areas:
+      "chart ticket"
+      "book ticket"
+      "portfolio portfolio";
+  }
+
+  .market-overview {
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 760px) {
+  .terminal-shell {
+    padding: 0 8px 8px;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "chart"
+      "ticket"
+      "book"
+      "portfolio";
+  }
+
+  .app-tabs {
+    grid-auto-flow: column;
+    overflow-x: auto;
+  }
+
+  .market-overview {
+    gap: 16px;
+  }
+
+  .market-identity {
+    min-width: 230px;
+  }
+
+  .price-chart {
+    height: 320px;
+  }
+
+  .table-tabs {
+    overflow-x: auto;
+  }
 }
