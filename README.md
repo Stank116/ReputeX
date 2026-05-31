@@ -1,18 +1,90 @@
 # ReputeX
 
-A perpetuals DEX built on Solana where your trading history actually means something. Every position you open, close, or get liquidated on feeds into an on-chain reputation score that determines how much leverage you can access.
+A perpetuals DEX on Solana where your on-chain track record actually earns you something — higher leverage. Every trade you make, every position you close, every time you get liquidated — it all feeds into a reputation score that the protocol enforces at the contract level. No off-chain whitelists, no manual approvals. Just your history.
 
 Built with Anchor 0.32.1 on Solana devnet.
 
 ---
 
-## React trading app
+## Why this exists
 
-The project now includes a React frontend in `frontend/`. Run it with Vite to
-exercise the complete perps flow: connect a local simulated wallet session,
-deposit/withdraw collateral, switch markets, open long/short positions, watch
-live mark-price movement, close positions, hit liquidation paths, and see
-reputation update with the same scoring model used by the Anchor program.
+Most perps protocols treat every wallet the same. You show up with fresh keys and you can immediately open a 10x position. ReputeX takes the opposite approach: new wallets start conservative, and you earn leverage over time by not blowing up.
+
+Reputation starts at 100 points when you create a profile. Win trades, it goes up. Build volume, it goes up. Get liquidated, it drops — hard. The protocol reads your score on every `open_position` call and caps your leverage accordingly.
+
+---
+
+## Stack
+
+- **Anchor 0.32.1** — Solana program framework
+- **Rust** — on-chain program
+- **React 18 + Vite** — frontend trading terminal
+- **@coral-xyz/anchor + @solana/web3.js** — client-side program interaction
+- **Pyth** — oracle price feeds (devnet/live path)
+
+---
+
+## Repo layout
+
+```
+ReputeX/
+├── program/                  ← Anchor workspace (the on-chain program)
+│   ├── Anchor.toml
+│   ├── Cargo.toml
+│   ├── programs/reputex/src/
+│   │   ├── lib.rs            ← entry point, instruction dispatch
+│   │   ├── constants.rs      ← margin ratios, BPS values, PDA seeds
+│   │   ├── errors.rs         ← every custom error code
+│   │   ├── events.rs         ← on-chain events
+│   │   ├── state/            ← Protocol, Market, TraderProfile, MarginAccount, Position
+│   │   ├── instructions/     ← one file per instruction
+│   │   └── utils/            ← PnL, liquidation, reputation math
+│   └── tests/reputex.ts      ← full integration test suite
+│
+└── frontend/                 ← React trading terminal
+    ├── src/
+    │   ├── App.jsx
+    │   ├── components/
+    │   │   ├── trading/      ← TradingTerminal, OrderBook, Portfolio, PriceChart
+    │   │   └── live/         ← LiveDevnetConsole for Phantom/devnet transactions
+    │   ├── hooks/
+    │   │   ├── useLiveTrading.js
+    │   │   └── useMarketData.js
+    │   ├── lib/
+    │   │   ├── perps.js       ← PnL and reputation math (mirrors on-chain)
+    │   │   ├── solana.js      ← wallet and RPC helpers
+    │   │   └── format.js      ← number formatting
+    │   └── config/markets.js  ← program ID and market config
+    └── public/idl/            ← generated IDL goes here before running the app
+```
+
+---
+
+## Prerequisites
+
+You need these installed before anything else:
+
+- **Node.js 18+**
+- **Rust** (stable toolchain)
+- **Solana CLI**
+- **Anchor CLI 0.32.1**
+
+Quick check:
+
+```bash
+node --version
+cargo --version
+solana --version
+anchor --version
+```
+
+If you don't have Anchor yet, follow the [official installation guide](https://www.anchor-lang.com/docs/installation). Anchor 0.32.1 specifically — the test suite will break on other versions.
+
+---
+
+## Running the frontend (local simulation)
+
+The frontend has two modes. The **Terminal** tab runs a fully local simulation — no wallet, no devnet, no real tokens. Good for playing with the trading flow without setting up a full Anchor environment.
 
 ```bash
 cd frontend
@@ -22,123 +94,15 @@ cp ../program/target/idl/reputex.json public/idl/reputex.json
 npm run dev
 ```
 
-The React app also includes a Live Devnet tab that connects Phantom to a deployed
-program once `anchor build` has generated a fresh IDL.
+Then open `http://127.0.0.1:5173`.
 
-This frontend runs as a local terminal and simulation layer. The Anchor program
-now custody-moves SPL collateral through a protocol vault PDA, while oracle,
-funding, and production risk controls still need deployment hardening.
-
----
-
-## What this is
-
-Most perps protocols give every wallet the same max leverage regardless of track record. ReputeX flips that — your reputation score goes up when you trade profitably and falls when you get rekt. New wallets start at 100 points and have to earn higher leverage through consistent performance.
-
-Collateral deposits and withdrawals move SPL tokens into and out of a protocol vault PDA. Trader balances are still tracked on-chain in `MarginAccount`, so the protocol can lock collateral, apply PnL, and enforce free-collateral checks.
-
----
-
-## How the accounts work
-
-Everything lives in PDAs. No arbitrary data storage, no mutable authority keys floating around.
-
-| Account         | Seed                                             | What it holds                                                              |
-| --------------- | ------------------------------------------------ | -------------------------------------------------------------------------- |
-| `Protocol`      | `["protocol"]`                                   | Global state — authority pubkey, trader/market counts, next position ID    |
-| `Market`        | `["market", market_index u64 LE]`                | Price, open interest, leverage cap, maintenance margin settings            |
-| `TraderProfile` | `["trader", owner pubkey]`                       | Lifetime stats — trades, wins, losses, liquidations, PnL, reputation score |
-| `MarginAccount` | `["margin", owner pubkey]`                       | Collateral balance and how much of it is currently locked in positions     |
-| `Position`      | `["position", owner pubkey, position_id u64 LE]` | Everything about one open trade                                            |
-
-One thing worth noting: `position_id` comes from `protocol.next_position_id` which increments on every `open_position` call. This prevents anyone from passing an arbitrary ID that collides with an existing position PDA.
-
----
-
-## Instructions
-
-**Admin instructions** — only the wallet that called `initialize_protocol` can run these:
-
-- `initialize_protocol` — sets up the Protocol PDA and SPL collateral vault. Call this once after deploying with the collateral mint you want to accept.
-- `initialize_market(market_index, symbol, initial_price)` — creates a new market. Market index 0 is typically SOL-PERP.
-- `update_market_price(market_index, new_price)` — moves the oracle price for local/admin devnet testing. This is blocked once oracle pricing is enabled for a market.
-- `update_market_price_from_pyth(market_index)` — reads a configured Pyth `PriceUpdateV2` account, validates feed id, freshness, confidence, positive price, and decimal normalization, then updates the market price.
-- `configure_market_oracle(market_index, oracle_feed_id, oracle_max_age_seconds, oracle_max_confidence_bps, price_decimals, oracle_enabled)` — stores the Pyth feed id and validation limits used by the oracle price path.
-- `update_funding_rate(market_index, funding_delta_bps)` — updates the cumulative funding index used when positions close or liquidate.
-- `settle_funding(market_index)` — permissionless crank that advances the cumulative funding index from long/short market skew.
-- `configure_market_risk(market_index, max_open_interest, max_skew_bps, max_funding_rate_bps, funding_interval_slots)` — tunes per-market risk limits.
-- `set_protocol_paused(trading_paused)` — emergency control that blocks new position opens while preserving close/withdraw/liquidation paths.
-- `fund_insurance(amount)` — transfers SPL collateral into the protocol vault and credits the insurance fund used to pay profitable PnL.
-
-**Trader instructions** — any wallet can call these for themselves:
-
-- `create_trader_profile` — initialises your TraderProfile and MarginAccount in one transaction.
-- `deposit_collateral(amount)` — transfers SPL collateral from the trader token account into the protocol vault and credits margin.
-- `withdraw_collateral(amount)` — transfers free (unlocked) SPL collateral from the protocol vault back to the trader.
-- `open_position(position_id, market_index, is_long, collateral_amount, leverage)` — locks collateral and opens a long or short. Leverage must be between 1 and the lower of the market's `max_leverage` and the trader's reputation tier.
-- `close_position(position_id, market_index)` — settles your position at current price, applies PnL to your balance, and updates your reputation.
-
-**Permissionless:**
-
-- `liquidate_position(position_id, market_index)` — anyone can call this on any position that has fallen below its maintenance margin (6.25% of position size by default). If the account still has positive equity, the instruction partially liquidates 50% of the position. If equity is exhausted, it fully liquidates the position, records bad debt when needed, and penalizes reputation.
-
----
-
-## Reputation scoring
-
-Your score starts at 100 when you create a profile. It goes up over time as you trade:
-
-```
-score = 100
-      + (winning_trades × 8)
-      + (total_trades × 3)
-      + (total_volume / 1000)
-      + (realized_pnl / 1000)   [only if pnl > 0]
-      - (liquidations × 30)
-      - max(0, avg_leverage_x100 - 200) / 20
-```
-
-The leverage penalty kicks in if your average leverage exceeds 2x. Each liquidation costs 30 points. High win rate and consistent volume push the score up over time.
-
-Reputation also gates maximum leverage:
-
-| Score   | Max leverage |
-| ------- | -----------: |
-| 0-79    |           2x |
-| 80-119  |           3x |
-| 120-179 |           4x |
-| 180+    |           5x |
-
----
-
-## PnL and liquidation math
-
-**PnL calculation:**
-
-```
-long PnL  = (current_price - entry_price) × size / entry_price
-short PnL = (entry_price - current_price) × size / entry_price
-```
-
-Position size is `collateral × leverage`, so a 500-unit collateral position at 2x leverage has size 1000. If you entered a long at 10,000 and the price moves to 11,000, your PnL is `(1000) × 1000 / 10000 = 100`.
-
-**Liquidation condition:**
-
-```
-equity = collateral + pnl
-maintenance_margin = size × 625 / 10000   (6.25%)
-
-position is liquidatable when: equity ≤ maintenance_margin
-```
-
-Positive-equity liquidations reduce 50% of the position. Zero/negative-equity
-liquidations close the entire remaining position.
+> If you haven't built the program yet and don't have an IDL, there's a pre-generated one already at `frontend/public/idl/reputex.json` from the last `anchor build`. You can use that to start the frontend without running a full build.
 
 ---
 
 ## Running the tests
 
-You need Anchor 0.32.1, Rust, and Node.js ≥ 18. If you haven't set those up yet, follow the [Anchor installation guide](https://www.anchor-lang.com/docs/installation).
+The test suite needs a full Anchor setup. From the `program/` directory:
 
 ```bash
 cd program
@@ -146,22 +110,22 @@ yarn install
 anchor test
 ```
 
-`anchor test` spins up a local validator, deploys the program, runs all tests, and tears everything down. First run takes a few minutes because Rust is compiling from scratch.
+`anchor test` handles everything — spins up a local validator, deploys the program, runs all 10 tests, and tears it down. First run takes a few minutes because Rust compiles from scratch.
 
-What the test suite covers:
+What the tests cover:
 
-1. Protocol and market initialization — checks that accounts are created with correct initial values
-2. Oracle configuration — verifies feed id, freshness, confidence, decimals, and enablement settings
-3. Trader profile creation and collateral deposit — verifies starting reputation score of 100 and clean balance
-4. Open and close a profitable long — moves price up 10%, closes position, checks PnL math and reputation update
-5. Pause guard — confirms new positions cannot open while trading is paused
-6. Skew guard — confirms tightened market skew limits reject one-sided exposure
-7. Funding crank — confirms the market-state funding path can settle
-8. Liquidation guard — tries to liquidate a healthy position and confirms the program rejects it
-9. Successful liquidation — crashes price to 1,000, confirms the underwater position gets liquidated, checks reputation penalty
-10. Withdraw collateral — verifies the balance decreases correctly
+1. Protocol and market initialization
+2. Oracle configuration (feed id, freshness, confidence, decimals)
+3. Trader profile creation and SPL collateral deposit
+4. Open and close a profitable long (price up 10%, check PnL and reputation)
+5. Pause guard — trading is blocked while protocol is paused
+6. Skew guard — one-sided positions rejected when skew limits are tight
+7. Funding crank — `settle_funding` advances the cumulative funding index
+8. Liquidation guard — healthy positions cannot be liquidated
+9. Successful liquidation — price crashes to 1,000, underwater position gets closed, reputation penalized
+10. Withdraw collateral — balance decreases correctly
 
-All 10 tests should pass with output like:
+All 10 should pass:
 
 ```
   reputex
@@ -176,93 +140,224 @@ All 10 tests should pass with output like:
     ✓ liquidates an underwater position
     ✓ withdraw collateral reduces balance correctly
 
-  10 passing (Xs)
+  10 passing
 ```
 
 ---
 
 ## Deploying to devnet
 
-Make sure you have devnet SOL first (`solana airdrop 2` or use the [faucet](https://faucet.solana.com)).
+Make sure you have devnet SOL first:
 
 ```bash
-# Switch to devnet
 solana config set --url devnet
+solana airdrop 2
+# or use https://faucet.solana.com if the CLI faucet is rate limited
+```
 
-# Build
+Build and deploy:
+
+```bash
+cd program
 anchor build
-
-# Deploy — this will take a minute
 anchor deploy --provider.cluster devnet
 ```
 
-After deployment, copy the printed program ID and update it in two places:
+If Anchor prints a new program ID (it will on a fresh deploy), update it in three places:
 
-1. `src/lib.rs` — the `declare_id!()` macro
-2. `Anchor.toml` — under `[programs.devnet]`
+1. `program/programs/reputex/src/lib.rs` — the `declare_id!()` macro
+2. `program/Anchor.toml` — under `[programs.devnet]`
+3. `frontend/src/config/markets.js`
 
-Then rebuild:
+Then rebuild to regenerate the IDL with the correct program ID:
 
 ```bash
 anchor build
 ```
 
-Verify the program is live:
+Bootstrap the protocol on devnet (creates the Protocol PDA, collateral mint, vault, and initial market):
 
-```
-solana program show <YOUR_PROGRAM_ID> --url devnet
+```bash
+npm run bootstrap:devnet
 ```
 
-You should see `Executable: true`.
+To configure a Pyth oracle feed at the same time:
+
+```bash
+PYTH_FEED_ID=<32-byte-hex-feed-id> npm run bootstrap:devnet
+```
+
+Copy the fresh IDL to the frontend:
+
+```bash
+cp program/target/idl/reputex.json frontend/public/idl/reputex.json
+```
+
+Start the frontend:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The **Live Devnet** tab connects Phantom (set to Devnet), loads the program from the IDL, and lets you send real transactions — create profile, deposit, open, close, liquidate.
 
 ---
 
-## Project structure
+## How the on-chain accounts work
+
+Everything lives in PDAs. No arbitrary storage, no mutable authority keys floating around.
+
+| Account | PDA seeds | What it holds |
+|---|---|---|
+| `Protocol` | `["protocol"]` | Global state: authority, trader count, market count, next position ID |
+| `Market` | `["market", market_index as u64 LE]` | Price, open interest, leverage cap, maintenance margin settings |
+| `TraderProfile` | `["trader", owner pubkey]` | Lifetime stats: trades, wins, losses, liquidations, PnL, reputation score |
+| `MarginAccount` | `["margin", owner pubkey]` | Collateral balance and how much is currently locked in open positions |
+| `Position` | `["position", owner pubkey, position_id as u64 LE]` | Everything about one open trade |
+
+Position IDs come from `protocol.next_position_id`, which increments on every `open_position` call. This prevents anyone from crafting an arbitrary ID that collides with an existing position PDA.
+
+---
+
+## Instructions
+
+**Admin only** (the wallet that called `initialize_protocol`):
+
+- `initialize_protocol` — creates the Protocol PDA and SPL collateral vault. Call once after deploy with the collateral mint.
+- `initialize_market(market_index, symbol, initial_price)` — creates a new market. Index 0 is typically SOL-PERP.
+- `update_market_price(market_index, new_price)` — manual price move for local testing. Blocked once oracle pricing is enabled.
+- `update_market_price_from_pyth(market_index)` — reads a Pyth `PriceUpdateV2` account, validates freshness/confidence/decimals, updates price.
+- `configure_market_oracle(...)` — sets the Pyth feed id and validation limits for a market.
+- `update_funding_rate(market_index, funding_delta_bps)` — updates the cumulative funding index.
+- `settle_funding(market_index)` — permissionless crank that advances funding from long/short skew.
+- `configure_market_risk(...)` — adjusts per-market open interest cap, skew limits, funding rate bounds.
+- `set_protocol_paused(trading_paused)` — emergency pause. Blocks new opens; close/withdraw/liquidate still work.
+- `fund_insurance(amount)` — adds SPL collateral to the insurance fund used to pay profitable PnL.
+
+**Any trader** (for their own accounts):
+
+- `create_trader_profile` — initializes `TraderProfile` and `MarginAccount` in one transaction. Reputation starts at 100.
+- `deposit_collateral(amount)` — transfers SPL tokens from the trader's token account into the protocol vault, credits margin.
+- `withdraw_collateral(amount)` — transfers free (unlocked) collateral back to the trader's token account.
+- `open_position(position_id, market_index, is_long, collateral_amount, leverage)` — locks collateral and opens a position. Leverage is capped at the lower of the market's `max_leverage` and the trader's reputation tier.
+- `close_position(position_id, market_index)` — settles at the current price, applies PnL, updates reputation.
+
+**Permissionless** (anyone can call on any eligible position):
+
+- `liquidate_position(position_id, market_index)` — liquidates any position that has fallen below maintenance margin (6.25%). Partial liquidation (50%) if equity is still positive; full liquidation if equity is gone.
+
+---
+
+## Reputation scoring
+
+Score starts at 100 on profile creation and updates on every close or liquidation:
 
 ```
-program/
-├── Anchor.toml
-├── Cargo.toml
-├── package.json
-├── tsconfig.json
-│
-├── programs/reputex/src/
-│   ├── lib.rs                        ← program entry, instruction dispatch
-│   ├── constants.rs                  ← leverage limits, BPS values, seeds
-│   ├── errors.rs                     ← all custom error codes
-│   │
-│   ├── state/
-│   │   ├── protocol.rs
-│   │   ├── market.rs
-│   │   ├── trader_profile.rs
-│   │   ├── margin_account.rs
-│   │   └── position.rs
-│   │
-│   ├── instructions/
-│   │   ├── initialize_protocol.rs
-│   │   ├── initialize_market.rs
-│   │   ├── create_trader_profile.rs
-│   │   ├── deposit_collateral.rs
-│   │   ├── withdraw_collateral.rs
-│   │   ├── update_market_price.rs
-│   │   ├── open_position.rs
-│   │   ├── close_position.rs
-│   │   └── liquidate_position.rs
-│   │
-│   └── utils/
-│       ├── math.rs                   ← PnL, liquidation, size, reputation calc
-│       └── mod.rs
-│
-└── tests/
-    └── reputex.ts                    ← full test suite
+score = 100
+      + (winning_trades × 8)
+      + (total_trades × 3)
+      + (total_volume / 1000)
+      + (realized_pnl / 1000)    ← only counts if pnl > 0
+      - (liquidations × 30)
+      - max(0, avg_leverage_x100 - 200) / 20
 ```
+
+The leverage penalty kicks in when your average leverage is above 2x. Each liquidation hits for 30 points. Winning trades and consistent volume push the score up over time.
+
+**Reputation tiers and leverage caps:**
+
+| Score | Max leverage |
+|---|---|
+| 0 – 79 | 2x |
+| 80 – 119 | 3x |
+| 120 – 179 | 4x |
+| 180+ | 5x |
+
+---
+
+## PnL and liquidation math
+
+**PnL:**
+
+```
+long PnL  = (current_price - entry_price) × size / entry_price
+short PnL = (entry_price - current_price) × size / entry_price
+```
+
+Position size is `collateral × leverage`. A 500-unit collateral position at 2x has size 1000. Long entered at 10,000, price moves to 11,000: `(1000) × 1000 / 10000 = 100 PnL`.
+
+**Liquidation threshold:**
+
+```
+equity = collateral + pnl
+maintenance_margin = size × 625 / 10_000    (6.25%)
+
+liquidatable when: equity ≤ maintenance_margin
+```
+
+Positive equity → 50% partial liquidation. Zero or negative equity → full close with bad debt recorded.
+
+---
+
+## Protocol constants (from `constants.rs`)
+
+| Constant | Value | Notes |
+|---|---|---|
+| Starting reputation | 100 | Set on `create_trader_profile` |
+| Initial margin | 20% | Equivalent to 5x max leverage |
+| Maintenance margin | 6.25% | Liquidation threshold |
+| Liquidation fee | 1% | Deducted on liquidation |
+| Partial liquidation | 50% | When equity is still positive |
+| Trading fee | 0.10% | Applied on open |
+| Default max skew | 100% | Tighten after bootstrap for production |
+| Max funding rate | 1% per interval | Cumulative cap |
+| Oracle max age | 30 seconds | Staleness cutoff |
+| Oracle max confidence | 1% | Confidence interval width |
+
+---
+
+## Common errors
+
+| Error | Likely cause |
+|---|---|
+| `InvalidLeverage` | Leverage exceeds reputation tier or market cap |
+| `InsufficientFreeCollateral` | Not enough unlocked collateral |
+| `PositionNotLiquidatable` | Position is still above maintenance margin |
+| `ProtocolPaused` | Protocol is paused; only closes/withdrawals allowed |
+| `StaleMarketPrice` | Oracle price hasn't been refreshed recently |
+| `OracleConfidenceTooWide` | Pyth confidence interval exceeds configured limit |
+| `SkewLimitExceeded` | Market is too one-sided for a new position in that direction |
+| `OpenInterestLimitExceeded` | Total OI cap hit for this market |
+| `InvalidPositionId` | Position ID doesn't match `protocol.next_position_id` |
 
 ---
 
 ## Known limitations
 
-- **Pyth oracle path is wired into the program.** Local tests still use `update_market_price` for deterministic price movement, while devnet/live usage should call `update_market_price_from_pyth` with a fresh `PriceUpdateV2` account before trading.
-- **Funding has a crank path, but keepers are still needed.** Funding payments are settled through a cumulative funding index and can be advanced from long/short skew with `settle_funding`.
-- **Frontend live trading needs devnet account configuration.** The React Live Devnet tab connects Phantom, derives PDAs, can create the owner associated token account, and sends deposit/withdraw/open/close/liquidate transactions after a fresh IDL is generated.
-- **Market max leverage is capped at 5x.** The effective max is lower for traders whose reputation tier has not unlocked the full market cap.
-- **Not audited.** Do not put real user funds at risk until this has independent security review, oracle review, and deployment/runbook hardening.
+- **Oracle path needs keeper setup.** Local tests use `update_market_price` for deterministic price movement. Live devnet and production should use `update_market_price_from_pyth` with fresh `PriceUpdateV2` accounts.
+- **Funding keepers are not included.** `settle_funding` is permissionless and can be called by anyone, but you'll need an off-chain keeper to call it regularly.
+- **Frontend live devnet tab requires devnet account setup.** You need a trader token account with test collateral before you can deposit. The UI has a `Create Token Account` button that helps with this.
+- **Max leverage is 5x.** The effective cap is lower until reputation unlocks higher tiers.
+- **Not audited.** Don't put real user funds at risk until independent smart contract, oracle, and deployment reviews are done.
+
+---
+
+## Devnet deployment checklist
+
+Before going live on devnet, make sure you've done all of these:
+
+- [ ] `npm run build` passes in `frontend/`
+- [ ] `cargo test` passes in `program/`
+- [ ] `anchor test` passes locally (all 10 tests)
+- [ ] Program deployed to devnet with correct program ID in `lib.rs`, `Anchor.toml`, and `markets.js`
+- [ ] `npm run bootstrap:devnet` completed successfully
+- [ ] Fresh IDL copied to `frontend/public/idl/reputex.json`
+- [ ] Phantom browser extension installed and set to Devnet
+- [ ] Live Devnet tab can: connect wallet, load program, create token account, create profile, deposit, open, close
+
+---
+
+## License
+
+Check `LICENSE` for terms.
