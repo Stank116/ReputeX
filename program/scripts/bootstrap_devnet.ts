@@ -1,6 +1,8 @@
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 
+import { getProvider } from "./provider";
+
 const TOKEN_PROGRAM_ID = new PublicKey(
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 );
@@ -27,7 +29,7 @@ const feedIdBytes = (feedId: string) => {
 };
 
 async function main() {
-  const provider = anchor.AnchorProvider.env();
+  const provider = getProvider();
   anchor.setProvider(provider);
 
   const program = anchor.workspace.Reputex as anchor.Program;
